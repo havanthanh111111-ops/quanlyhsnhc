@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SheetSyncConfig, Student, ViolationRecord, WeeklyPlan, StudentTask, ViolationType, Teacher, SchoolYear, ClassItem, SystemUser } from '../types';
 import SpreadsheetSync from './SpreadsheetSync';
 import { Settings, Users, ShieldAlert, Database, Plus, Trash2, CheckCircle2, Save, User, Calendar, BookOpen, GraduationCap, Edit2, Check, X, Sparkles, Key } from 'lucide-react';
 import { getWeekConfig, saveWeekConfig } from '../utils/weekUtils';
+import { db, onSnapshot, doc, setDoc } from '../lib/firebase';
 
 interface SystemSettingsProps {
   teachers: Teacher[];
@@ -216,13 +217,43 @@ export default function SystemSettings({
     return parseInt(localStorage.getItem('totalSchoolWeeks') || '37', 10);
   });
 
+  // Subscribe to real-time week configuration in Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'weeks'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.startDate !== undefined) {
+          setSchoolYearStartDate(data.startDate);
+          localStorage.setItem('schoolYearStartDate', data.startDate);
+        }
+        if (data.totalWeeks !== undefined) {
+          setTotalSchoolWeeks(data.totalWeeks);
+          localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const handleSaveWeekConfig = () => {
     if (!schoolYearStartDate) {
       triggerMessage('Vui lòng chọn ngày bắt đầu của Tuần 1', true);
       return;
     }
     saveWeekConfig(schoolYearStartDate, totalSchoolWeeks);
-    triggerMessage('Đã cập nhật cấu hình ngày bắt đầu học và phân phối 37/38 tuần học thành công!');
+    
+    // Also save to Firestore!
+    setDoc(doc(db, 'settings', 'weeks'), {
+      startDate: schoolYearStartDate,
+      totalWeeks: totalSchoolWeeks
+    })
+      .then(() => {
+        triggerMessage('Đã cập nhật và đồng bộ cấu hình ngày bắt đầu học lên Web Công khai thành công!');
+      })
+      .catch(e => {
+        console.error('Lỗi khi lưu cấu hình tuần lên Firestore:', e);
+        triggerMessage('Có lỗi xảy ra khi đồng bộ lên máy chủ, nhưng đã lưu trên trình duyệt của bạn.', true);
+      });
   };
 
   // 1. Teacher Management
