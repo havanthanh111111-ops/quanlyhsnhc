@@ -169,10 +169,26 @@ export default function PublicPortal({
   const [participationData, setParticipationData] = useState<Record<string, number>>({});
 
   // Enhanced week-based duty scheduling states for public portal
-  const weeksList = useMemo(() => {
-    const { startDate, totalWeeks } = getWeekConfig();
-    return generateWeeks(startDate, totalWeeks);
+  const [weekConfig, setWeekConfig] = useState(() => getWeekConfig());
+
+  // Subscribe to real-time week configuration in Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'weeks'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.startDate && data.totalWeeks) {
+          localStorage.setItem('schoolYearStartDate', data.startDate);
+          localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
+          setWeekConfig({ startDate: data.startDate, totalWeeks: data.totalWeeks });
+        }
+      }
+    });
+    return () => unsub();
   }, []);
+
+  const weeksList = useMemo(() => {
+    return generateWeeks(weekConfig.startDate, weekConfig.totalWeeks);
+  }, [weekConfig]);
 
   const [selectedDutyWeek, setSelectedDutyWeek] = useState<number>(() => {
     const { startDate, totalWeeks } = getWeekConfig();
@@ -181,6 +197,16 @@ export default function PublicPortal({
     if (found) return found.weekNumber;
     return list.find(w => w.weekNumber === 35) ? 35 : (list[0]?.weekNumber || 1);
   });
+
+  useEffect(() => {
+    const list = generateWeeks(weekConfig.startDate, weekConfig.totalWeeks);
+    const found = list.find(w => isDateInWeek(new Date().toISOString().split('T')[0], w));
+    if (found) {
+      setSelectedDutyWeek(found.weekNumber);
+    } else {
+      setSelectedDutyWeek(list.find(w => w.weekNumber === 35) ? 35 : (list[0]?.weekNumber || 1));
+    }
+  }, [weekConfig]);
 
   // Duty Schedule loading and seeding
   const [dutySchedule, setDutySchedule] = useState<Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }>>({});
