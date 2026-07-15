@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, StudentTask, WeeklyPlan } from '../types';
 import { Plus, CheckCircle, Clock, Play, Trash2, FileText, Download, TrendingUp, Sparkles, AlertCircle, Award, Edit3 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { CustomConfirmModal } from './CustomConfirmModal';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
+import { db, onSnapshot, doc } from '../lib/firebase';
 
 interface TaskManagerProps {
   students: Student[];
@@ -34,8 +35,26 @@ export default function TaskManager({
   activeClassName,
   isReadOnly = false
 }: TaskManagerProps) {
-  const { startDate, totalWeeks } = getWeekConfig();
-  const weeksList = generateWeeks(startDate, totalWeeks);
+  const [weekConfig, setWeekConfig] = useState(() => getWeekConfig());
+
+  // Subscribe to real-time week configuration in Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'weeks'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.startDate && data.totalWeeks) {
+          localStorage.setItem('schoolYearStartDate', data.startDate);
+          localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
+          setWeekConfig({ startDate: data.startDate, totalWeeks: data.totalWeeks });
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const weeksList = useMemo(() => {
+    return generateWeeks(weekConfig.startDate, weekConfig.totalWeeks);
+  }, [weekConfig]);
 
   const [activeTab, setActiveTab] = useState<'assign' | 'report'>('assign');
   const reportPrintRef = useRef<HTMLDivElement>(null);
