@@ -441,6 +441,14 @@ export default function App() {
               const data = docDoc.data();
               if (data.adminPin) setAdminPin(data.adminPin);
               if (data.config) setConfig(data.config);
+            } else if (docDoc.id === 'weeks') {
+              const data = docDoc.data();
+              if (data.startDate && data.totalWeeks) {
+                localStorage.setItem('schoolYearStartDate', data.startDate);
+                localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
+                // Dispatch event so other components receive the storage change
+                window.dispatchEvent(new Event('storage'));
+              }
             }
           });
         });
