@@ -5,6 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Student, StudentTask } from '../types';
+import { db, onSnapshot, doc, setDoc, deleteDoc } from '../lib/firebase';
+import { saveTimetable, saveReminder, deleteReminder, saveParticipation, saveDuty } from '../lib/dbService';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
 import { 
   Users, 
@@ -159,8 +161,9 @@ export default function ClassManager({
     'Thể dục', 'Sinh hoạt lớp', 'Chào cờ', 'Trải nghiệm HN', 'Tự học'
   ];
 
-  // Load Timetable for this class
+  // Load Timetable for this class (with real-time Firestore sync)
   useEffect(() => {
+    if (!activeClassId) return;
     const key = `app_timetable_${activeClassId}`;
     const saved = localStorage.getItem(key);
     if (saved) {
@@ -172,6 +175,19 @@ export default function ClassManager({
     } else {
       generateEmptyTimetable();
     }
+
+    // Subscribe to Firestore timetables
+    const unsub = onSnapshot(doc(db, 'timetables', activeClassId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.cells) {
+          setTimetable(data.cells);
+          localStorage.setItem(`app_timetable_${activeClassId}`, JSON.stringify(data.cells));
+        }
+      }
+    });
+
+    return () => unsub();
   }, [activeClassId]);
 
   const generateEmptyTimetable = () => {
@@ -197,6 +213,11 @@ export default function ClassManager({
   const saveTimetable = (updated: TimetableCell[]) => {
     setTimetable(updated);
     localStorage.setItem(`app_timetable_${activeClassId}`, JSON.stringify(updated));
+    // Also save to Firestore!
+    setDoc(doc(db, 'timetables', activeClassId), {
+      classId: activeClassId,
+      cells: updated
+    }).catch(e => console.error('Lỗi khi lưu thời khóa biểu lên Firestore:', e));
   };
 
   const handleCellClick = (day: string, period: number, session: 'Sáng' | 'Chiều') => {
@@ -217,7 +238,7 @@ export default function ClassManager({
     setEditingCell(null);
   };
 
-  // Load reminders and participation data
+  // Load reminders and participation data (with real-time Firestore sync)
   useEffect(() => {
     if (!activeClassId || !selectedDate) return;
 
@@ -282,9 +303,36 @@ export default function ClassManager({
       setParticipationData(seeded);
       localStorage.setItem(participationKey, JSON.stringify(seeded));
     }
+
+    // Subscribe to Firestore Reminders
+    const unsubReminder = onSnapshot(doc(db, 'reminders', `${activeClassId}_${selectedDate}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.text !== undefined) {
+          setReminderText(data.text);
+          localStorage.setItem(`app_reminders_${activeClassId}_${selectedDate}`, data.text);
+        }
+      }
+    });
+
+    // Subscribe to Firestore Participations
+    const unsubParticipation = onSnapshot(doc(db, 'participations', `${activeClassId}_${selectedDate}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.data) {
+          setParticipationData(data.data);
+          localStorage.setItem(`app_participation_${activeClassId}_${selectedDate}`, JSON.stringify(data.data));
+        }
+      }
+    });
+
+    return () => {
+      unsubReminder();
+      unsubParticipation();
+    };
   }, [activeClassId, selectedDate, timetable, students]);
 
-  // Load Duty Schedule for this class and selected week
+  // Load Duty Schedule for this class and selected week (with real-time Firestore sync)
   useEffect(() => {
     if (!activeClassId) return;
     const key = `app_duty_${activeClassId}_week_${selectedDutyWeek}`;
@@ -305,46 +353,58 @@ export default function ClassManager({
           const parsed = JSON.parse(fallbackSaved);
           setDutySchedule(parsed);
           localStorage.setItem(key, fallbackSaved);
-          return;
         } catch (e) {
           // ignore and seed new
         }
-      }
+      } else {
+        // Seed default duty schedule based on groups rotation
+        const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+        const seeded: Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }> = {};
 
-      // Seed default duty schedule based on groups rotation
-      const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-      const seeded: Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }> = {};
+        days.forEach((day, idx) => {
+          // rotation offset based on week number so different groups get default assigned each week!
+          const groupNum = ((idx + selectedDutyWeek) % 4) + 1;
+          const groupName = `Tổ ${groupNum}`;
+          const groupStudents = classStudents.filter(s => s.groupName === groupName);
+          
+          let sweeping = 'Chưa phân công';
+          let cleaningBoard = 'Chưa phân công';
+          let trash = 'Chưa phân công';
 
-      days.forEach((day, idx) => {
-        // rotation offset based on week number so different groups get default assigned each week!
-        const groupNum = ((idx + selectedDutyWeek) % 4) + 1;
-        const groupName = `Tổ ${groupNum}`;
-        const groupStudents = classStudents.filter(s => s.groupName === groupName);
-        
-        let sweeping = 'Chưa phân công';
-        let cleaningBoard = 'Chưa phân công';
-        let trash = 'Chưa phân công';
-
-        if (groupStudents.length > 0) {
-          sweeping = groupStudents[0]?.name;
-          if (groupStudents.length > 1) {
-            sweeping += `, ${groupStudents[1]?.name}`;
+          if (groupStudents.length > 0) {
+            sweeping = groupStudents[0]?.name;
+            if (groupStudents.length > 1) {
+              sweeping += `, ${groupStudents[1]?.name}`;
+            }
+            cleaningBoard = groupStudents[2]?.name || groupStudents[0]?.name || 'Học sinh tổ';
+            trash = groupStudents[3]?.name || groupStudents[1]?.name || 'Học sinh tổ';
           }
-          cleaningBoard = groupStudents[2]?.name || groupStudents[0]?.name || 'Học sinh tổ';
-          trash = groupStudents[3]?.name || groupStudents[1]?.name || 'Học sinh tổ';
-        }
 
-        seeded[day] = {
-          group: groupName,
-          sweeping,
-          cleaningBoard,
-          trash
-        };
-      });
+          seeded[day] = {
+            group: groupName,
+            sweeping,
+            cleaningBoard,
+            trash
+          };
+        });
 
-      setDutySchedule(seeded);
-      localStorage.setItem(key, JSON.stringify(seeded));
+        setDutySchedule(seeded);
+        localStorage.setItem(key, JSON.stringify(seeded));
+      }
     }
+
+    // Subscribe to Firestore duties
+    const unsub = onSnapshot(doc(db, 'duties', `${activeClassId}_week_${selectedDutyWeek}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.schedule) {
+          setDutySchedule(data.schedule);
+          localStorage.setItem(`app_duty_${activeClassId}_week_${selectedDutyWeek}`, JSON.stringify(data.schedule));
+        }
+      }
+    });
+
+    return () => unsub();
   }, [activeClassId, selectedDutyWeek, students]);
 
   // --- SEATING CHART LOGIC ---
@@ -1246,6 +1306,13 @@ export default function ClassManager({
               setParticipationData(updated);
               const storageKey = `app_participation_${activeClassId}_${selectedDate}`;
               localStorage.setItem(storageKey, JSON.stringify(updated));
+
+              // Also save to Firestore!
+              setDoc(doc(db, 'participations', `${activeClassId}_${selectedDate}`), {
+                classId: activeClassId,
+                date: selectedDate,
+                data: updated
+              }).catch(e => console.error('Lỗi khi lưu phát biểu lên Firestore:', e));
             };
 
             const handleDecrement = (studentId: string, subject: string) => {
@@ -1260,18 +1327,33 @@ export default function ClassManager({
               setParticipationData(updated);
               const storageKey = `app_participation_${activeClassId}_${selectedDate}`;
               localStorage.setItem(storageKey, JSON.stringify(updated));
+
+              // Also save to Firestore!
+              setDoc(doc(db, 'participations', `${activeClassId}_${selectedDate}`), {
+                classId: activeClassId,
+                date: selectedDate,
+                data: updated
+              }).catch(e => console.error('Lỗi khi lưu phát biểu lên Firestore:', e));
             };
 
             const handleSaveReminder = () => {
               if (isReadOnly) return;
               const reminderKey = `app_reminders_${activeClassId}_${selectedDate}`;
               localStorage.setItem(reminderKey, reminderText);
-              triggerConfirm(
-                'Thành công',
-                'Đã lưu thành công nội dung dặn dò học tập cho ngày được chọn!',
-                () => {},
-                { confirmText: 'Đóng', type: 'info' }
-              );
+
+              // Also save to Firestore!
+              setDoc(doc(db, 'reminders', `${activeClassId}_${selectedDate}`), {
+                classId: activeClassId,
+                date: selectedDate,
+                text: reminderText
+              }).then(() => {
+                triggerConfirm(
+                  'Thành công',
+                  'Đã lưu thành công nội dung dặn dò học tập cho ngày được chọn!',
+                  () => {},
+                  { confirmText: 'Đóng', type: 'info' }
+                );
+              }).catch(e => console.error('Lỗi khi lưu dặn dò lên Firestore:', e));
             };
 
             const handleDeleteReminder = () => {
@@ -1283,6 +1365,9 @@ export default function ClassManager({
                   const reminderKey = `app_reminders_${activeClassId}_${selectedDate}`;
                   localStorage.removeItem(reminderKey);
                   setReminderText('');
+
+                  // Also delete from Firestore!
+                  deleteDoc(doc(db, 'reminders', `${activeClassId}_${selectedDate}`)).catch(e => console.error('Lỗi khi xóa dặn dò trên Firestore:', e));
                 },
                 { confirmText: 'Xóa ngay', type: 'danger' }
               );
@@ -1572,6 +1657,13 @@ export default function ClassManager({
                   setDutySchedule(updated);
                   const key = `app_duty_${activeClassId}_week_${selectedDutyWeek}`;
                   localStorage.setItem(key, JSON.stringify(updated));
+
+                  // Also save to Firestore!
+                  setDoc(doc(db, 'duties', `${activeClassId}_week_${selectedDutyWeek}`), {
+                    classId: activeClassId,
+                    weekNumber: selectedDutyWeek,
+                    schedule: updated
+                  }).catch(e => console.error('Lỗi khi lưu trực nhật lên Firestore:', e));
                 },
                 { confirmText: 'Áp dụng', type: 'info' }
               );
@@ -1581,12 +1673,20 @@ export default function ClassManager({
               if (isReadOnly) return;
               const key = `app_duty_${activeClassId}_week_${selectedDutyWeek}`;
               localStorage.setItem(key, JSON.stringify(dutySchedule));
-              triggerConfirm(
-                'Thành công',
-                `Đã lưu bảng phân công trực nhật Tuần ${selectedDutyWeek} lớp học thành công!`,
-                () => {},
-                { confirmText: 'Đóng', type: 'info' }
-              );
+
+              // Also save to Firestore!
+              setDoc(doc(db, 'duties', `${activeClassId}_week_${selectedDutyWeek}`), {
+                classId: activeClassId,
+                weekNumber: selectedDutyWeek,
+                schedule: dutySchedule
+              }).then(() => {
+                triggerConfirm(
+                  'Thành công',
+                  `Đã lưu bảng phân công trực nhật Tuần ${selectedDutyWeek} lớp học thành công!`,
+                  () => {},
+                  { confirmText: 'Đóng', type: 'info' }
+                );
+              }).catch(e => console.error('Lỗi khi lưu trực nhật lên Firestore:', e));
             };
 
             const appendStudentToField = (day: string, field: 'sweeping' | 'cleaningBoard' | 'trash', studentName: string) => {
@@ -1727,6 +1827,13 @@ export default function ClassManager({
                   // Also save the duty schedule locally
                   const key = `app_duty_${activeClassId}_week_${selectedDutyWeek}`;
                   localStorage.setItem(key, JSON.stringify(dutySchedule));
+
+                  // Also save to Firestore!
+                  setDoc(doc(db, 'duties', `${activeClassId}_week_${selectedDutyWeek}`), {
+                    classId: activeClassId,
+                    weekNumber: selectedDutyWeek,
+                    schedule: dutySchedule
+                  }).catch(e => console.error('Lỗi khi lưu trực nhật lên Firestore:', e));
 
                   triggerConfirm(
                     'Đồng bộ hoàn tất',
