@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Announcement } from '../types';
+import { db, onSnapshot, collection } from '../lib/firebase';
+import { saveAnnouncement, deleteAnnouncement } from '../lib/dbService';
 import { 
   Megaphone, 
   Plus, 
@@ -478,8 +480,26 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
       }
     } else {
       setAnnouncements(DEFAULT_ANNOUNCEMENTS);
-      localStorage.setItem('app_announcements', JSON.stringify(DEFAULT_ANNOUNCEMENTS));
     }
+
+    const unsub = onSnapshot(collection(db, 'announcements'), (snap) => {
+      const list: Announcement[] = [];
+      snap.forEach(docDoc => {
+        list.push(docDoc.data() as Announcement);
+      });
+      if (list.length > 0) {
+        list.sort((a, b) => b.id.localeCompare(a.id));
+        setAnnouncements(list);
+        localStorage.setItem('app_announcements', JSON.stringify(list));
+      } else {
+        // Seed DEFAULT_ANNOUNCEMENTS if empty
+        DEFAULT_ANNOUNCEMENTS.forEach(ann => {
+          saveAnnouncement(ann);
+        });
+      }
+    });
+
+    return () => unsub();
   }, []);
 
   // Save/Publish announcements to web công (PublicPortal)
@@ -503,19 +523,16 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
 
     if (editingId) {
       // Editing mode
-      const updated = announcements.map(ann => {
-        if (ann.id === editingId) {
-          return {
-            ...ann,
-            title: title.trim(),
-            content: content.trim(),
-            category,
-            date,
-            isNew
-          };
-        }
-        return ann;
-      });
+      const updatedAnn = {
+        id: editingId,
+        title: title.trim(),
+        content: content.trim(),
+        category,
+        date,
+        isNew
+      };
+      saveAnnouncement(updatedAnn);
+      const updated = announcements.map(ann => ann.id === editingId ? updatedAnn : ann);
       saveToStorage(updated);
       setEditingId(null);
       showStatus('success', 'Đã cập nhật tin tức thành công!');
@@ -529,6 +546,7 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
         date,
         isNew
       };
+      saveAnnouncement(newAnn);
       const updated = [newAnn, ...announcements];
       saveToStorage(updated);
       showStatus('success', 'Đã thêm tin tức mới thành công!');
@@ -578,6 +596,7 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
   const handleDelete = (id: string) => {
     if (isReadOnly) return;
     if (window.confirm('Bạn có chắc chắn muốn xóa tin tức này không? Tin tức sẽ lập tức gỡ khỏi Web Công khai.')) {
+      deleteAnnouncement(id);
       const filtered = announcements.filter(ann => ann.id !== id);
       saveToStorage(filtered);
       showStatus('success', 'Đã xóa và đồng bộ gỡ tin tức khỏi Web Công khai!');
@@ -585,6 +604,9 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
   };
 
   const handlePublishAll = () => {
+    announcements.forEach(ann => {
+      saveAnnouncement(ann);
+    });
     localStorage.setItem('app_announcements', JSON.stringify(announcements));
     showStatus('success', '🚀 Đã cập nhật và đồng bộ toàn bộ tin tức lên Web Công khai thành công!');
   };
