@@ -89,6 +89,23 @@ export default function ClassManager({
   const [dutySchedule, setDutySchedule] = useState<Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }>>({});
   
   // States for enhanced week-based duty scheduling
+  const [weekConfig, setWeekConfig] = useState(() => getWeekConfig());
+
+  // Subscribe to real-time week configuration in Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'weeks'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.startDate && data.totalWeeks) {
+          localStorage.setItem('schoolYearStartDate', data.startDate);
+          localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
+          setWeekConfig({ startDate: data.startDate, totalWeeks: data.totalWeeks });
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const [selectedDutyWeek, setSelectedDutyWeek] = useState<number>(() => {
     const { startDate, totalWeeks } = getWeekConfig();
     const list = generateWeeks(startDate, totalWeeks);
@@ -96,6 +113,17 @@ export default function ClassManager({
     if (found) return found.weekNumber;
     return list.find(w => w.weekNumber === 35) ? 35 : (list[0]?.weekNumber || 1);
   });
+
+  useEffect(() => {
+    const list = generateWeeks(weekConfig.startDate, weekConfig.totalWeeks);
+    const found = list.find(w => isDateInWeek(new Date().toISOString().split('T')[0], w));
+    if (found) {
+      setSelectedDutyWeek(found.weekNumber);
+    } else {
+      setSelectedDutyWeek(list.find(w => w.weekNumber === 35) ? 35 : (list[0]?.weekNumber || 1));
+    }
+  }, [weekConfig]);
+
   const [selectedDutyGroup, setSelectedDutyGroup] = useState<string>('Tổ 1');
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState<boolean>(false);
   const [activeDayGroupDropdown, setActiveDayGroupDropdown] = useState<string | null>(null);
@@ -1558,8 +1586,7 @@ export default function ClassManager({
           {/* ======================= PHÂN CÔNG TRỰC NHẬT VIEW ======================= */}
           {subTab === 'duty' && (() => {
             const daysOfWeek = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-            const { startDate, totalWeeks } = getWeekConfig();
-            const weeksList = generateWeeks(startDate, totalWeeks);
+            const weeksList = generateWeeks(weekConfig.startDate, weekConfig.totalWeeks);
 
             const handleUpdateDutyField = (day: string, field: 'sweeping' | 'cleaningBoard' | 'trash', value: string) => {
               if (isReadOnly) return;
