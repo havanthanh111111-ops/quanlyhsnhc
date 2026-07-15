@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { db, onSnapshot, collection, doc } from '../lib/firebase';
 import { 
   GraduationCap, 
   Phone, 
@@ -195,7 +196,7 @@ export default function PublicPortal({
     return `ngày ${d} tháng ${m} năm ${y}`;
   };
 
-  // Load reminders and participation data
+  // Load reminders and participation data (with real-time Firestore sync)
   useEffect(() => {
     if (!timetableClassId || !selectedDate) return;
 
@@ -261,9 +262,35 @@ export default function PublicPortal({
       setParticipationData(seeded);
       localStorage.setItem(participationKey, JSON.stringify(seeded));
     }
+
+    // 3. Real-time Firestore sync
+    const unsubReminder = onSnapshot(doc(db, 'reminders', `${timetableClassId}_${selectedDate}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.text !== undefined) {
+          setReminderText(data.text);
+          localStorage.setItem(`app_reminders_${timetableClassId}_${selectedDate}`, data.text);
+        }
+      }
+    });
+
+    const unsubParticipation = onSnapshot(doc(db, 'participations', `${timetableClassId}_${selectedDate}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.data) {
+          setParticipationData(data.data);
+          localStorage.setItem(`app_participation_${timetableClassId}_${selectedDate}`, JSON.stringify(data.data));
+        }
+      }
+    });
+
+    return () => {
+      unsubReminder();
+      unsubParticipation();
+    };
   }, [timetableClassId, selectedDate, timetable, students]);
 
-  // Duty Schedule loading and seeding
+  // Duty Schedule loading and seeding (with real-time Firestore sync)
   useEffect(() => {
     if (!timetableClassId) return;
     const key = `app_duty_${timetableClassId}_week_${selectedDutyWeek}`;
@@ -284,48 +311,60 @@ export default function PublicPortal({
           const parsed = JSON.parse(fallbackSaved);
           setDutySchedule(parsed);
           localStorage.setItem(key, fallbackSaved);
-          return;
         } catch (e) {
           // ignore and seed new
         }
-      }
+      } else {
+        const classStudents = students.filter(s => s.classId === timetableClassId);
+        const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+        const seeded: Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }> = {};
 
-      const classStudents = students.filter(s => s.classId === timetableClassId);
-      const days = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-      const seeded: Record<string, { group: string; sweeping: string; cleaningBoard: string; trash: string }> = {};
+        days.forEach((day, idx) => {
+          const groupNum = ((idx + selectedDutyWeek) % 4) + 1;
+          const groupName = `Tổ ${groupNum}`;
+          const groupStudents = classStudents.filter(s => s.groupName === groupName);
+          
+          let sweeping = 'Chưa phân công';
+          let cleaningBoard = 'Chưa phân công';
+          let trash = 'Chưa phân công';
 
-      days.forEach((day, idx) => {
-        const groupNum = ((idx + selectedDutyWeek) % 4) + 1;
-        const groupName = `Tổ ${groupNum}`;
-        const groupStudents = classStudents.filter(s => s.groupName === groupName);
-        
-        let sweeping = 'Chưa phân công';
-        let cleaningBoard = 'Chưa phân công';
-        let trash = 'Chưa phân công';
-
-        if (groupStudents.length > 0) {
-          sweeping = groupStudents[0]?.name;
-          if (groupStudents.length > 1) {
-            sweeping += `, ${groupStudents[1]?.name}`;
+          if (groupStudents.length > 0) {
+            sweeping = groupStudents[0]?.name;
+            if (groupStudents.length > 1) {
+              sweeping += `, ${groupStudents[1]?.name}`;
+            }
+            cleaningBoard = groupStudents[2]?.name || groupStudents[0]?.name || 'Học sinh tổ';
+            trash = groupStudents[3]?.name || groupStudents[1]?.name || 'Học sinh tổ';
           }
-          cleaningBoard = groupStudents[2]?.name || groupStudents[0]?.name || 'Học sinh tổ';
-          trash = groupStudents[3]?.name || groupStudents[1]?.name || 'Học sinh tổ';
-        }
 
-        seeded[day] = {
-          group: groupName,
-          sweeping,
-          cleaningBoard,
-          trash
-        };
-      });
+          seeded[day] = {
+            group: groupName,
+            sweeping,
+            cleaningBoard,
+            trash
+          };
+        });
 
-      setDutySchedule(seeded);
-      localStorage.setItem(key, JSON.stringify(seeded));
+        setDutySchedule(seeded);
+        localStorage.setItem(key, JSON.stringify(seeded));
+      }
     }
+
+    // Subscribe to Firestore duties
+    const unsub = onSnapshot(doc(db, 'duties', `${timetableClassId}_week_${selectedDutyWeek}`), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.schedule) {
+          setDutySchedule(data.schedule);
+          localStorage.setItem(`app_duty_${timetableClassId}_week_${selectedDutyWeek}`, JSON.stringify(data.schedule));
+        }
+      }
+    });
+
+    return () => unsub();
   }, [timetableClassId, selectedDutyWeek, students]);
 
-  // Load Timetable whenever selected timetableClassId changes
+  // Load Timetable whenever selected timetableClassId changes (with real-time Firestore sync)
   useEffect(() => {
     if (!timetableClassId) {
       setTimetable([]);
@@ -356,6 +395,19 @@ export default function PublicPortal({
       });
       setTimetable(initial);
     }
+
+    // Subscribe to Firestore timetables
+    const unsub = onSnapshot(doc(db, 'timetables', timetableClassId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.cells) {
+          setTimetable(data.cells);
+          localStorage.setItem(`app_timetable_${timetableClassId}`, JSON.stringify(data.cells));
+        }
+      }
+    });
+
+    return () => unsub();
   }, [timetableClassId]);
 
   // Violation stats states
@@ -471,7 +523,7 @@ export default function PublicPortal({
     return defaultAnn;
   });
 
-  // Re-sync announcements when active or visible (in case local storage changes in other window or view)
+  // Re-sync announcements when active or visible (with real-time Firestore sync)
   useEffect(() => {
     const syncAnnouncements = () => {
       const saved = localStorage.getItem('app_announcements');
@@ -483,8 +535,25 @@ export default function PublicPortal({
     };
     
     syncAnnouncements();
+    
+    // Subscribe to Firestore announcements
+    const unsub = onSnapshot(collection(db, 'announcements'), (snap) => {
+      const list: any[] = [];
+      snap.forEach(docDoc => {
+        list.push(docDoc.data());
+      });
+      if (list.length > 0) {
+        list.sort((a, b) => b.id.localeCompare(a.id));
+        setAnnouncements(list);
+        localStorage.setItem('app_announcements', JSON.stringify(list));
+      }
+    });
+
     window.addEventListener('storage', syncAnnouncements);
-    return () => window.removeEventListener('storage', syncAnnouncements);
+    return () => {
+      unsub();
+      window.removeEventListener('storage', syncAnnouncements);
+    };
   }, []);
 
   // Quick statistics calculation
