@@ -1,0 +1,6 @@
+{
+  "name": "Quản lý Học sinh",
+  "description": "Hệ thống quản lý học sinh, vi phạm, chuyên cần, kế hoạch tuần và giao nhiệm vụ cho học sinh, đồng bộ dữ liệu với Google Sheets và xuất báo cáo PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "collections": {
+    "teachers": {
+      "description": "Danh sách giáo viên chủ nhiệm"
+    },
+    "schoolYears": {
+      "description": "Danh sách năm học"
+    },
+    "classes": {
+      "description": "Danh sách các lớp học"
+    },
+    "students": {
+      "description": "Thông tin chi tiết học sinh, bao gồm chỗ ngồi, tổ"
+    },
+    "violations": {
+      "description": "Nhật ký vi phạm nề nếp kỷ luật"
+    },
+    "violationTypes": {
+      "description": "Các loại vi phạm nề nếp và điểm trừ mặc định"
+    },
+    "plans": {
+      "description": "Kế hoạch tuần của giáo viên"
+    },
+    "tasks": {
+      "description": "Nhiệm vụ giao cho học sinh và báo cáo kết quả"
+    },
+    "academicUpdates": {
+      "description": "Bảng điểm và cập nhật học tập của học sinh"
+    },
+    "settings": {
+      "description": "Cấu hình hệ thống, mã PIN bảo mật, cấu hình đồng bộ"
+    }
+  }
+}

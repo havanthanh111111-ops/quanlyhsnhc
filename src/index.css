@@ -1,0 +1,456 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes marqueeVertical {
+  0% { transform: translateY(0%); }
+  100% { transform: translateY(-50%); }
+}
+
+.animate-marquee-vertical {
+  animation: marqueeVertical 20s linear infinite;
+}
+
+.animate-marquee-vertical:hover {
+  animation-play-state: paused;
+}
+
+/* Scrollbar styles */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.25);
+  border-radius: 99px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+/* Utility to hide standard native scrollbars */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print styles */
+@media print {
+  /* Set document size and background */
+  @page {
+    size: A4;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  
+  /* Hide the entire app UI and background elements */
+  body, html, #root {
+    background: white !important;
+    color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Hide all elements by default */
+  #root * {
+    visibility: hidden !important;
+  }
+
+  /* Show only the active print preview container and its children */
+  #weekly-plan-print-preview,
+  #weekly-plan-print-preview *,
+  #student-report-print-preview,
+  #student-report-print-preview * {
+    visibility: visible !important;
+  }
+
+  /* Position the print target perfectly */
+  #weekly-plan-print-preview,
+  #student-report-print-preview {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Ensure text colors are readable on paper */
+  .text-slate-950, .text-slate-900, .text-slate-850, .text-gray-800, .text-black {
+    color: #000000 !important;
+  }
+  .text-slate-500, .text-slate-600, .text-gray-500, .text-gray-600 {
+    color: #4b5563 !important;
+  }
+  .text-red-700, .text-rose-600 {
+    color: #b91c1c !important;
+  }
+  .text-emerald-700, .text-emerald-600 {
+    color: #047857 !important;
+  }
+  .text-amber-700, .text-amber-600 {
+    color: #b45309 !important;
+  }
+}
+
+/* ==========================================
+   PREMIUM LIGHT EDUCATION THEME OVERRIDES 
+   ========================================== */
+
+/* Outer app workspace and backgrounds */
+div#root, 
+body {
+  background-color: #f8fafc !important; /* Slate 50 */
+  color: #1e293b !important; /* Slate 800 */
+}
+
+.bg-\[\#050505\] {
+  background-color: #f8fafc !important; /* Soft Slate 50 */
+}
+
+/* Sidebar and Mobile Header */
+aside.w-64,
+.bg-\[\#0a0a0a\],
+header.md\:hidden {
+  background-color: #f1f5f9 !important; /* Very Light Cool Gray */
+  border-right: 1px solid #e2e8f0 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+aside.w-64 * {
+  color: #1e293b !important;
+}
+
+/* Sidebar Footer background */
+.bg-\[\#080808\] {
+  background-color: #e2e8f0 !important;
+  border-top: 1px solid #cbd5e1 !important;
+}
+
+/* Sidebar navigation buttons */
+aside.w-64 nav button {
+  color: #475569 !important;
+  border-color: transparent !important;
+}
+
+aside.w-64 nav button:hover {
+  background-color: rgba(203, 213, 225, 0.4) !important;
+  color: #0f172a !important;
+}
+
+aside.w-64 nav button.bg-white\/5 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #2563eb !important; /* Blue active nav indicator */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+
+aside.w-64 nav button div.rounded-full {
+  background-color: #2563eb !important; /* Blue indicators */
+}
+
+/* Sidebar profile / Connection card */
+aside.w-64 .bg-white\/\[0\.02\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+aside.w-64 select {
+  color: #0f172a !important;
+}
+aside.w-64 select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Card panels - container divs */
+.bg-\[\#111\],
+.bg-\[\#0d0d0d\],
+.bg-\[\#121212\],
+.bg-\[\#141414\],
+.bg-\[\#1a1a1a\],
+.bg-\[\#161616\],
+.bg-\[\#0e0e0e\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -2px rgba(0,0,0,0.02) !important;
+}
+
+/* Modal right preview columns or container backgrounds that were dark black */
+.lg\:w-2\/3.bg-black {
+  background-color: #f1f5f9 !important; /* Soft slate-100 container for white page sheet */
+  border-left: 1px solid #e2e8f0 !important;
+}
+
+/* Table headers inside sheets and spreadsheets */
+.bg-\[\#161616\],
+.bg-\[\#161616\]\/40 {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+}
+
+/* Sub-panels, scrollable blocks (e.g. log list lists) */
+.bg-black\/40 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Student & violation items list */
+.bg-\[\#0d0d0d\].hover\:bg-white\/\[0\.03\]:hover,
+.hover\:bg-white\/\[0\.03\]:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Lighter transparent backgrounds used for row stripes or subcards */
+.bg-white\/\[0\.01\],
+.bg-white\/\[0\.02\],
+.bg-white\/\[0\.03\],
+.bg-white\/5 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Sub-inputs and indicators */
+.bg-black\/30 {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Input, textareas, selects */
+input[type="text"],
+input[type="date"],
+input[type="number"],
+select,
+textarea,
+input.bg-\[\#0a0a0a\],
+select.bg-\[\#0a0a0a\],
+textarea.bg-\[\#0a0a0a\] {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb !important; /* Blue focus outline */
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+/* Texts values */
+.text-white {
+  color: #0f172a !important; /* Absolute deep text on white */
+}
+.text-white-pure,
+.bg-blue-600.text-white,
+.bg-blue-600 .text-white,
+.bg-blue-700.text-white,
+.bg-blue-700 .text-white,
+.bg-blue-900.text-white,
+.bg-blue-900 .text-white,
+.bg-blue-950.text-white,
+.bg-blue-950 .text-white,
+.bg-indigo-900.text-white,
+.bg-indigo-900 .text-white,
+.bg-amber-600.text-white,
+.bg-amber-600 .text-white,
+.bg-emerald-600.text-white,
+.bg-emerald-600 .text-white,
+.bg-rose-500.text-white,
+.bg-rose-500 .text-white,
+.bg-rose-600.text-white,
+.bg-rose-600 .text-white,
+.bg-\[\#1e3a8a\].text-white,
+.bg-\[\#1e3a8a\] .text-white,
+.bg-slate-900.text-white,
+.bg-slate-900 .text-white {
+  color: #ffffff !important;
+}
+.text-white-pure {
+  color: #ffffff !important;
+}
+.text-white\/95,
+.text-white\/90,
+.text-white\/85,
+.text-white\/80 {
+  color: #1e293b !important;
+}
+.text-white\/75,
+.text-white\/70,
+.text-white\/65,
+.text-white\/60,
+.text-white\/55,
+.text-white\/50 {
+  color: #334155 !important; /* Dark Slate 700 to make it very dark and readable */
+}
+.text-white\/45,
+.text-white\/40,
+.text-white\/35,
+.text-white\/30 {
+  color: #475569 !important; /* Slate 600 */
+}
+.text-white\/25,
+.text-white\/20,
+.text-white\/15,
+.text-white\/10 {
+  color: #64748b !important; /* Slate 500 */
+}
+
+/* Placeholders */
+::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* --- THEME BRANDING: Blue and Green Accents --- */
+
+/* Translate Amber branding to educational Blue */
+.text-amber-500,
+.text-amber-400 {
+  color: #2563eb !important; /* Intellectual Blue */
+}
+
+.text-amber-600 {
+  color: #1d4ed8 !important;
+}
+
+/* Amber background components like primary buttons, active tabs */
+.bg-amber-600,
+.bg-amber-500 {
+  background-color: #2563eb !important; /* High-contrast blue background */
+  color: #ffffff !important; /* White text for contrast */
+}
+
+.hover\:bg-amber-700:hover,
+.hover\:bg-amber-600:hover {
+  background-color: #1d4ed8 !important; /* Darker blue */
+  color: #ffffff !important;
+}
+
+/* Inactive tabs, lighter borders */
+.border-white\/5 {
+  border-color: #e2e8f0 !important;
+}
+.border-white\/10 {
+  border-color: #cbd5e1 !important;
+}
+.border-white\/20 {
+  border-color: #94a3b8 !important;
+}
+
+/* Selected active indicators */
+.bg-white\/\[0\.02\] {
+  background-color: #f1f5f9 !important;
+}
+
+.border-amber-500\/10 {
+  border-color: rgba(37, 99, 235, 0.1) !important;
+}
+.border-amber-500\/20 {
+  border-color: rgba(37, 99, 235, 0.2) !important;
+}
+.border-amber-500\/80 {
+  border-color: rgba(37, 99, 235, 0.6) !important;
+}
+
+/* Badges / Pill elements */
+.bg-amber-500\/10 {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+  color: #2563eb !important;
+  border-color: rgba(37, 99, 235, 0.15) !important;
+}
+
+/* SUCCESS / POSITIVE BRANDING: FRESH EDUCATION GREEN */
+/* Let's make top achievements, completed items, and success markers use Green */
+.text-emerald-500,
+.text-emerald-400,
+.text-green-400,
+.text-green-500 {
+  color: #10b981 !important; /* Educational Green */
+}
+
+.bg-emerald-500\/10,
+.bg-green-500\/10 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.bg-emerald-600 {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.hover\:bg-emerald-700:hover {
+  background-color: #059669 !important;
+}
+
+.disabled\:bg-emerald-800:disabled {
+  background-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+
+/* Modals backdrop */
+.bg-black\/80,
+.bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Charts Tooltips & Legends */
+.recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05) !important;
+}
+
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value {
+  color: #1e293b !important;
+}
+
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #e2e8f0 !important;
+}
+
+.recharts-text {
+  fill: #475569 !important;
+}
+
