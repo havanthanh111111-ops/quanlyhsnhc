@@ -19,7 +19,8 @@ import {
   StudentTask, 
   AcademicUpdate,
   SheetSyncConfig,
-  SystemUser
+  SystemUser,
+  Announcement
 } from '../types';
 
 // Helper to check if a collection is empty
@@ -182,4 +183,32 @@ export async function deleteUser(id: string) {
 
 export async function saveGlobalSettings(settings: { adminPin: string; config: SheetSyncConfig }) {
   await setDoc(doc(db, 'settings', 'global'), settings);
+}
+
+export async function saveAnnouncement(item: Announcement) {
+  await setDoc(doc(db, 'announcements', item.id), item);
+}
+
+export async function deleteAnnouncement(id: string) {
+  await deleteDoc(doc(db, 'announcements', id));
+}
+
+export async function saveTimetable(classId: string, cells: any[]) {
+  await setDoc(doc(db, 'timetables', classId), { classId, cells });
+}
+
+export async function saveReminder(classId: string, date: string, text: string) {
+  await setDoc(doc(db, 'reminders', `${classId}_${date}`), { classId, date, text });
+}
+
+export async function deleteReminder(classId: string, date: string) {
+  await deleteDoc(doc(db, 'reminders', `${classId}_${date}`));
+}
+
+export async function saveParticipation(classId: string, date: string, data: Record<string, number>) {
+  await setDoc(doc(db, 'participations', `${classId}_${date}`), { classId, date, data });
+}
+
+export async function saveDuty(classId: string, weekNumber: number, schedule: any) {
+  await setDoc(doc(db, 'duties', `${classId}_week_${weekNumber}`), { classId, weekNumber, schedule });
 }
