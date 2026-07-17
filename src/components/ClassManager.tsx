@@ -78,7 +78,7 @@ export default function ClassManager({
   onUpdateTask,
   onDeleteTask
 }: ClassManagerProps) {
-  const [subTab, setSubTab] = useState<'groups' | 'seating' | 'timetable' | 'reminders' | 'duty' | 'officers'>('groups');
+  const [subTab, setSubTab] = useState<'groups' | 'seating' | 'timetable' | 'reminders' | 'duty'>('groups');
   const [remindersSubTab, setRemindersSubTab] = useState<'reminders' | 'participation'>('reminders');
 
   // Selected date for "Dặn dò hàng ngày" and "Bảng theo dõi học tập"
@@ -652,7 +652,6 @@ export default function ClassManager({
       <div className="flex border-b border-white/5 pb-px mb-2 overflow-x-auto gap-4 md:gap-8 scrollbar-none select-none">
         {[
           { id: 'groups', label: 'Phân Tổ Lớp Học', icon: Users },
-          { id: 'officers', label: 'Ban Cán Sự Lớp', icon: User },
           { id: 'seating', label: 'Sơ đồ Ghế ngồi', icon: Grid },
           { id: 'timetable', label: 'Thời khóa biểu Tuần', icon: Calendar },
           { id: 'reminders', label: 'Dặn dò & Học tập', icon: FileText },
@@ -814,197 +813,6 @@ export default function ClassManager({
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* ======================= BAN CÁN SỰ LỚP VIEW ======================= */}
-          {subTab === 'officers' && (
-            <div className="space-y-6 animate-fadeIn">
-              {/* Header/Title */}
-              <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">Ban Cán Sự Lớp & Chức Danh</h3>
-                  <p className="text-[11px] text-white/40">Phân công Lớp trưởng, Lớp phó, Tổ trưởng và các chức danh tùy chọn cho học sinh.</p>
-                </div>
-              </div>
-
-              {/* Grid of Key Officer Assignments */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Ban cán sự chủ chốt */}
-                <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md space-y-4">
-                  <div className="border-b border-white/5 pb-2 mb-3">
-                    <h4 className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-2">
-                      <User size={14} /> Ban Cán Sự Chủ Chốt (Cả Lớp)
-                    </h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { label: 'Lớp trưởng', roleName: 'Lớp trưởng' },
-                      { label: 'Lớp phó Học tập', roleName: 'Lớp phó Học tập' },
-                      { label: 'Lớp phó Kỷ luật', roleName: 'Lớp phó Kỷ luật' },
-                      { label: 'Lớp phó Lao động', roleName: 'Lớp phó Lao động' },
-                      { label: 'Lớp phó Văn thể mỹ', roleName: 'Lớp phó Văn thể mỹ' },
-                      { label: 'Thủ quỹ', roleName: 'Thủ quỹ' },
-                      { label: 'Bí thư Chi đoàn', roleName: 'Bí thư Chi đoàn' }
-                    ].map(role => {
-                      const currentOfficer = classStudents.find(s => s.role === role.roleName);
-                      return (
-                        <div key={role.roleName} className="space-y-1">
-                          <label className="text-[10px] font-semibold text-white/50 block">{role.label}</label>
-                          <select
-                            disabled={isReadOnly}
-                            value={currentOfficer?.id || ''}
-                            onChange={(e) => handleAssignRole(role.roleName, e.target.value)}
-                            className="w-full text-xs bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
-                          >
-                            <option value="" className="bg-[#111]">-- Chưa phân công --</option>
-                            {classStudents.map(s => (
-                              <option key={s.id} value={s.id} className="bg-[#111]">{s.name} ({s.id})</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Ban cán sự Tổ */}
-                <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md space-y-4">
-                  <div className="border-b border-white/5 pb-2 mb-3">
-                    <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-2">
-                      <Users size={14} /> Ban Cán Sự Tổ (Tổ Trưởng & Tổ Phó)
-                    </h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { label: 'Tổ trưởng Tổ 1', roleName: 'Tổ trưởng Tổ 1', group: 'Tổ 1' },
-                      { label: 'Tổ phó Tổ 1', roleName: 'Tổ phó Tổ 1', group: 'Tổ 1' },
-                      { label: 'Tổ trưởng Tổ 2', roleName: 'Tổ trưởng Tổ 2', group: 'Tổ 2' },
-                      { label: 'Tổ phó Tổ 2', roleName: 'Tổ phó Tổ 2', group: 'Tổ 2' },
-                      { label: 'Tổ trưởng Tổ 3', roleName: 'Tổ trưởng Tổ 3', group: 'Tổ 3' },
-                      { label: 'Tổ phó Tổ 3', roleName: 'Tổ phó Tổ 3', group: 'Tổ 3' },
-                      { label: 'Tổ trưởng Tổ 4', roleName: 'Tổ trưởng Tổ 4', group: 'Tổ 4' },
-                      { label: 'Tổ phó Tổ 4', roleName: 'Tổ phó Tổ 4', group: 'Tổ 4' }
-                    ].map(role => {
-                      const groupStudents = classStudents.filter(s => s.groupName === role.group);
-                      const currentOfficer = classStudents.find(s => s.role === role.roleName);
-                      return (
-                        <div key={role.roleName} className="space-y-1">
-                          <label className="text-[10px] font-semibold text-white/50 block">
-                            {role.label} <span className="text-white/30">({role.group})</span>
-                          </label>
-                          <select
-                            disabled={isReadOnly}
-                            value={currentOfficer?.id || ''}
-                            onChange={(e) => handleAssignRole(role.roleName, e.target.value)}
-                            className="w-full text-xs bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 cursor-pointer"
-                          >
-                            <option value="" className="bg-[#111]">-- Chưa phân công --</option>
-                            {groupStudents.map(s => (
-                              <option key={s.id} value={s.id} className="bg-[#111]">{s.name} ({s.id})</option>
-                            ))}
-                          </select>
-                          {groupStudents.length === 0 && (
-                            <span className="text-[9px] text-rose-400 block">Chưa có học sinh trong {role.group}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom Title Assign List */}
-              <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-white/5 pb-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      Danh sách chức danh chi tiết học sinh
-                    </h4>
-                    <p className="text-[10px] text-white/40">Gõ trực tiếp để thay đổi hoặc đặt chức danh tùy chỉnh cho từng học sinh.</p>
-                  </div>
-                  <div className="w-full sm:w-64">
-                    <input
-                      type="text"
-                      placeholder="Tìm kiếm học sinh..."
-                      value={officerSearchQuery}
-                      onChange={(e) => setOfficerSearchQuery(e.target.value)}
-                      className="w-full text-xs bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/5 text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                        <th className="py-2.5 px-3">Mã HS</th>
-                        <th className="py-2.5 px-3">Họ và Tên</th>
-                        <th className="py-2.5 px-3">Tổ</th>
-                        <th className="py-2.5 px-3">Chức danh / Chức vụ hiện tại</th>
-                        <th className="py-2.5 px-3 w-1/3">Cập nhật chức danh tùy chỉnh</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.02]">
-                      {classStudents
-                        .filter(s => {
-                          if (!officerSearchQuery.trim()) return true;
-                          const q = officerSearchQuery.toLowerCase();
-                          return s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q);
-                        })
-                        .map(s => {
-                          return (
-                            <tr key={s.id} className="text-xs hover:bg-white/[0.01]">
-                              <td className="py-3 px-3 font-mono text-white/40">{s.id}</td>
-                              <td className="py-3 px-3 font-semibold text-white/80">{s.name}</td>
-                              <td className="py-3 px-3">
-                                {s.groupName ? (
-                                  <span className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-white/60">
-                                    {s.groupName}
-                                  </span>
-                                ) : (
-                                  <span className="text-white/20 text-[10px]">Chưa phân tổ</span>
-                                )}
-                              </td>
-                              <td className="py-3 px-3">
-                                {s.role ? (
-                                  <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded text-[10px] font-bold">
-                                    {s.role}
-                                  </span>
-                                ) : (
-                                  <span className="text-white/20 text-[10px]">Học sinh</span>
-                                )}
-                              </td>
-                              <td className="py-2 px-3">
-                                <input
-                                  type="text"
-                                  disabled={isReadOnly}
-                                  placeholder="Nhập chức vụ khác..."
-                                  value={customRoles[s.id] ?? ''}
-                                  onChange={(e) => {
-                                    setCustomRoles(prev => ({ ...prev, [s.id]: e.target.value }));
-                                  }}
-                                  onBlur={() => {
-                                    const newRole = customRoles[s.id]?.trim();
-                                    if ((newRole || undefined) !== s.role) {
-                                      onUpdateStudent({ ...s, role: newRole || undefined });
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      (e.target as HTMLInputElement).blur();
-                                    }
-                                  }}
-                                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1 text-xs focus:outline-none focus:border-amber-500"
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             </div>
           )}
