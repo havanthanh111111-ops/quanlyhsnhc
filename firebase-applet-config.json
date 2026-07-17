@@ -1,9 +1,12 @@
 {
+  
   "projectId": "fleet-realm-5k91c",
   "appId": "1:850191185866:web:de6f5ba49cf87f3f274133",
   "apiKey": "AIzaSyCX7j5vVQ7-3mFp6KTqBQpFL1coU7oKA98",
   "authDomain": "fleet-realm-5k91c.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-qunlhcsinh-b753f283-6203-4b78-895e-599daa91e793",
   "storageBucket": "fleet-realm-5k91c.firebasestorage.app",
   "messagingSenderId": "850191185866",
-  "firestoreDatabaseId": "ai-studio-qunlhcsinh-b753f283-6203-4b78-895e-599daa91e793"
+  "measurementId": "",
+  "oAuthClientId": "850191185866-0tnearpfuh03m4ra6j252971sj3eg361.apps.googleusercontent.com"
 }
