@@ -923,13 +923,22 @@ export default function App() {
                   </svg>
                 </div>
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-white">XÁC THỰC QUYỀN HỆ THỐNG</h3>
-                <p className="text-xs text-slate-400">Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.</p>
+                <p className="text-xs text-slate-400">
+                  Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.
+                  <span className="block mt-1 text-[10px] text-amber-500/90 font-mono">
+                    Tài khoản: <strong className="underline">admin</strong> | Mật khẩu: <strong className="underline">123456</strong>
+                  </span>
+                </p>
               </div>
 
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const foundUser = users.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
+                  let foundUser = users.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
+                  if (!foundUser) {
+                    foundUser = initialUsers.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
+                  }
+                  
                   if (foundUser) {
                     setCurrentUser(foundUser);
                     setViewMode('admin');
