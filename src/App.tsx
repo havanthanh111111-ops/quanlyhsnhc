@@ -320,120 +320,166 @@ export default function App() {
   });
 
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [showDbHelp, setShowDbHelp] = useState(false);
 
   // Synchronize Firestore and load real-time listeners on mount
   useEffect(() => {
     let isMounted = true;
     let unsubscribes: (() => void)[] = [];
+    let hasConnected = false;
+
+    // Safety fallback timeout: if Firestore takes more than 10 seconds to respond,
+    // we proceed with local storage so the application is not stuck forever on the loading screen.
+    const fallbackTimeout = setTimeout(() => {
+      if (isMounted && !hasConnected) {
+        console.warn('Kết nối Firestore chậm (Timeout 10s). Đang tự động chuyển sang sử dụng bộ nhớ cục bộ (Local Storage) làm dự phòng.');
+        setDbError('Thời gian kết nối Firestore vượt quá 10 giây. Đang chạy ở chế độ dự phòng cục bộ (Local Storage).');
+        setIsDbLoaded(true);
+      }
+    }, 10000);
 
     async function initDb() {
       try {
-        const empty = await dbService.isCollectionEmpty('schoolYears');
-        if (empty) {
-          console.log('Cơ sở dữ liệu Firestore trống. Đang tải dữ liệu ban đầu lên...');
-          await dbService.seedFirestore({
-            teachers,
-            schoolYears,
-            classes,
-            students,
-            violations,
-            violationTypes,
-            plans,
-            tasks,
-            academicUpdates,
-            adminPin,
-            config,
-            users
-          });
-        }
-
         if (!isMounted) return;
+
+        // Common handler when the first successful data snapshot is received
+        const handleFirstConnection = () => {
+          if (!hasConnected) {
+            hasConnected = true;
+            setDbError(null);
+            clearTimeout(fallbackTimeout);
+            setIsDbLoaded(true);
+            console.log('Kết nối thành công với cơ sở dữ liệu Cloud Firestore!');
+          }
+        };
 
         // Subscribe to Teachers
         const unsubTeachers = onSnapshot(collection(db, 'teachers'), (snap) => {
+          handleFirstConnection();
           const list: Teacher[] = [];
           snap.forEach(doc => list.push(doc.data() as Teacher));
           if (list.length > 0) setTeachers(list);
+        }, (err) => {
+          console.error('Lỗi subscription teachers:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubTeachers);
 
         // Subscribe to SchoolYears
         const unsubYears = onSnapshot(collection(db, 'schoolYears'), (snap) => {
+          handleFirstConnection();
           const list: SchoolYear[] = [];
           snap.forEach(doc => list.push(doc.data() as SchoolYear));
           if (list.length > 0) setSchoolYears(list);
+        }, (err) => {
+          console.error('Lỗi subscription schoolYears:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubYears);
 
         // Subscribe to Classes
         const unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+          handleFirstConnection();
           const list: ClassItem[] = [];
           snap.forEach(doc => list.push(doc.data() as ClassItem));
           if (list.length > 0) setClasses(list);
+        }, (err) => {
+          console.error('Lỗi subscription classes:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubClasses);
 
         // Subscribe to Students
         const unsubStudents = onSnapshot(collection(db, 'students'), (snap) => {
+          handleFirstConnection();
           const list: Student[] = [];
           snap.forEach(doc => list.push(doc.data() as Student));
           setStudents(list);
+        }, (err) => {
+          console.error('Lỗi subscription students:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubStudents);
 
         // Subscribe to Violations
         const unsubViolations = onSnapshot(collection(db, 'violations'), (snap) => {
+          handleFirstConnection();
           const list: ViolationRecord[] = [];
           snap.forEach(doc => list.push(doc.data() as ViolationRecord));
           setViolations(list);
+        }, (err) => {
+          console.error('Lỗi subscription violations:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubViolations);
 
         // Subscribe to ViolationTypes
         const unsubTypes = onSnapshot(collection(db, 'violationTypes'), (snap) => {
+          handleFirstConnection();
           const list: ViolationType[] = [];
           snap.forEach(doc => list.push(doc.data() as ViolationType));
           if (list.length > 0) setViolationTypes(list);
+        }, (err) => {
+          console.error('Lỗi subscription violationTypes:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubTypes);
 
         // Subscribe to Plans
         const unsubPlans = onSnapshot(collection(db, 'plans'), (snap) => {
+          handleFirstConnection();
           const list: WeeklyPlan[] = [];
           snap.forEach(doc => list.push(doc.data() as WeeklyPlan));
           setPlans(list);
+        }, (err) => {
+          console.error('Lỗi subscription plans:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubPlans);
 
         // Subscribe to Tasks
         const unsubTasks = onSnapshot(collection(db, 'tasks'), (snap) => {
+          handleFirstConnection();
           const list: StudentTask[] = [];
           snap.forEach(doc => list.push(doc.data() as StudentTask));
           setTasks(list);
+        }, (err) => {
+          console.error('Lỗi subscription tasks:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubTasks);
 
         // Subscribe to AcademicUpdates
         const unsubAcademic = onSnapshot(collection(db, 'academicUpdates'), (snap) => {
+          handleFirstConnection();
           const list: AcademicUpdate[] = [];
           snap.forEach(doc => list.push(doc.data() as AcademicUpdate));
           setAcademicUpdates(list);
+        }, (err) => {
+          console.error('Lỗi subscription academicUpdates:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubAcademic);
 
         // Subscribe to Users
         const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+          handleFirstConnection();
           const list: SystemUser[] = [];
           snap.forEach(doc => list.push(doc.data() as SystemUser));
           if (list.length > 0) {
             list.sort((a, b) => a.stt - b.stt);
             setUsers(list);
           }
+        }, (err) => {
+          console.error('Lỗi subscription users:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubUsers);
 
         // Subscribe to Global Settings
         const unsubSettings = onSnapshot(collection(db, 'settings'), (snap) => {
+          handleFirstConnection();
           snap.forEach(docDoc => {
             if (docDoc.id === 'global') {
               const data = docDoc.data();
@@ -449,14 +495,43 @@ export default function App() {
               }
             }
           });
+        }, (err) => {
+          console.error('Lỗi subscription settings:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubSettings);
 
-        setIsDbLoaded(true);
-      } catch (err) {
+        // Check and seed the database in the background without blocking the UI
+        dbService.isCollectionEmpty('schoolYears')
+          .then(async (empty) => {
+            if (empty && isMounted) {
+              console.log('Cơ sở dữ liệu Firestore trống. Đang tải dữ liệu ban đầu lên...');
+              await dbService.seedFirestore({
+                teachers,
+                schoolYears,
+                classes,
+                students,
+                violations,
+                violationTypes,
+                plans,
+                tasks,
+                academicUpdates,
+                adminPin,
+                config,
+                users
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn('Lỗi kiểm tra/seed database trong nền:', err);
+          });
+
+      } catch (err: any) {
         console.error('Lỗi khi thiết lập Real-time Firestore:', err);
-        // Fallback to local storage
-        setIsDbLoaded(true);
+        if (!hasConnected) {
+          setDbError(err?.message || String(err));
+          setIsDbLoaded(true);
+        }
       }
     }
 
@@ -465,6 +540,7 @@ export default function App() {
     return () => {
       isMounted = false;
       unsubscribes.forEach(unsub => unsub());
+      clearTimeout(fallbackTimeout);
     };
   }, []);
 
@@ -629,59 +705,59 @@ export default function App() {
   };
 
   const handleUpdateTeachers = (updated: Teacher[]) => {
+    const removed = teachers.filter(t => !updated.some(u => u.id === t.id));
+    removed.forEach(t => dbService.deleteTeacher(t.id));
     setTeachers(updated);
     updated.forEach(item => dbService.saveTeacher(item));
   };
 
   const handleUpdateSchoolYears = (updated: SchoolYear[]) => {
+    const removed = schoolYears.filter(sy => !updated.some(u => u.id === sy.id));
+    removed.forEach(sy => dbService.deleteSchoolYear(sy.id));
     setSchoolYears(updated);
     updated.forEach(item => dbService.saveSchoolYear(item));
   };
 
   const handleUpdateClasses = (updated: ClassItem[]) => {
+    const removed = classes.filter(c => !updated.some(u => u.id === c.id));
+    removed.forEach(c => dbService.deleteClass(c.id));
     setClasses(updated);
     updated.forEach(item => dbService.saveClass(item));
   };
 
   const handleUpdateViolationTypes = (updated: ViolationType[]) => {
+    const removed = violationTypes.filter(vt => !updated.some(u => u.id === vt.id));
+    removed.forEach(vt => dbService.deleteViolationType(vt.id));
     setViolationTypes(updated);
     updated.forEach(v => dbService.saveViolationType(v));
   };
 
   const handleUpdateStudents = (updated: Student[]) => {
+    const removed = students.filter(s => !updated.some(u => u.id === s.id));
+    removed.forEach(s => dbService.deleteStudent(s.id));
     setStudents(updated);
-    if (updated.length === 0) {
-      students.forEach(s => dbService.deleteStudent(s.id));
-    } else {
-      updated.forEach(s => dbService.saveStudent(s));
-    }
+    updated.forEach(s => dbService.saveStudent(s));
   };
 
   const handleUpdateViolations = (updated: ViolationRecord[]) => {
+    const removed = violations.filter(v => !updated.some(u => u.id === v.id));
+    removed.forEach(v => dbService.deleteViolation(v.id));
     setViolations(updated);
-    if (updated.length === 0) {
-      violations.forEach(v => dbService.deleteViolation(v.id));
-    } else {
-      updated.forEach(v => dbService.saveViolation(v));
-    }
+    updated.forEach(v => dbService.saveViolation(v));
   };
 
   const handleUpdatePlans = (updated: WeeklyPlan[]) => {
+    const removed = plans.filter(p => !updated.some(u => u.id === p.id));
+    removed.forEach(p => dbService.deletePlan(p.id));
     setPlans(updated);
-    if (updated.length === 0) {
-      plans.forEach(p => dbService.deletePlan(p.id));
-    } else {
-      updated.forEach(p => dbService.savePlan(p));
-    }
+    updated.forEach(p => dbService.savePlan(p));
   };
 
   const handleUpdateTasks = (updated: StudentTask[]) => {
+    const removed = tasks.filter(t => !updated.some(u => u.id === t.id));
+    removed.forEach(t => dbService.deleteTask(t.id));
     setTasks(updated);
-    if (updated.length === 0) {
-      tasks.forEach(t => dbService.deleteTask(t.id));
-    } else {
-      updated.forEach(t => dbService.saveTask(t));
-    }
+    updated.forEach(t => dbService.saveTask(t));
   };
 
   const handleUpdateAdminPin = (newPin: string) => {
@@ -833,26 +909,27 @@ export default function App() {
           }}
         />
 
-        {/* Beautiful Username/Password Authentication Modal */}
+        {/* Beautiful Username/Password Authentication Modal (Bright & Modern Light Theme) */}
         {isAuthModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fadeIn select-none">
             <div 
-              className="rounded-3xl p-8 max-w-sm w-full border border-white/10 space-y-6 text-center shadow-2xl"
-              style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+              className="bg-white rounded-[32px] p-8 max-w-sm w-full border border-slate-100 space-y-6 text-center shadow-2xl animate-scaleUp text-slate-800"
             >
-              <div className="space-y-2">
-                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 mx-auto border border-amber-500/20">
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="space-y-3">
+                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mx-auto border border-blue-100">
+                  <svg className="w-5 h-5 text-blue-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
-                <h3 className="text-xs font-extrabold uppercase tracking-widest text-white">XÁC THỰC QUYỀN HỆ THỐNG</h3>
-                <p className="text-xs text-slate-400">
-                  Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.
-                  <span className="block mt-1 text-[10px] text-amber-500/90 font-mono">
-                    Tài khoản: <strong className="underline">admin</strong> | Mật khẩu: <strong className="underline">123456</strong>
-                  </span>
-                </p>
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800">XÁC THỰC QUYỀN HỆ THỐNG</h3>
+                <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl space-y-1">
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.
+                  </p>
+                  <p className="text-[11px] text-blue-600 font-sans font-semibold mt-1">
+                    Tài khoản: <strong className="underline font-bold">admin</strong> | Mật khẩu: <strong className="underline font-bold">123456</strong>
+                  </p>
+                </div>
               </div>
 
               <form 
@@ -882,7 +959,7 @@ export default function App() {
                 className="space-y-4 text-left"
               >
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-widest text-white/40 block">Tên tài khoản</label>
+                  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">Tên tài khoản</label>
                   <input
                     type="text"
                     value={loginUsername}
@@ -891,14 +968,14 @@ export default function App() {
                       setLoginError('');
                     }}
                     placeholder="Ví dụ: admin, hotro"
-                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-sans"
                     autoFocus
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] uppercase tracking-widest text-white/40 block">Mật khẩu</label>
+                  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">Mật khẩu</label>
                   <input
                     type="password"
                     value={loginPassword}
@@ -907,24 +984,24 @@ export default function App() {
                       setLoginError('');
                     }}
                     placeholder="••••••••"
-                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 font-sans"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all font-sans"
                     required
                   />
                 </div>
 
                 {loginError && (
-                  <p className="text-xs text-rose-400 font-semibold text-center">{loginError}</p>
+                  <p className="text-xs text-rose-500 font-bold text-center animate-shake">{loginError}</p>
                 )}
 
                 <button
                   type="submit"
-                  className="w-full py-3 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-black font-bold text-xs rounded-xl transition flex items-center justify-center cursor-pointer uppercase tracking-wider"
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs rounded-xl transition flex items-center justify-center cursor-pointer uppercase tracking-wider shadow-lg shadow-blue-500/15"
                 >
                   Đăng nhập
                 </button>
               </form>
 
-              <div className="pt-2 border-t border-white/5">
+              <div className="pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => {
@@ -933,7 +1010,7 @@ export default function App() {
                     setLoginPassword('');
                     setLoginError('');
                   }}
-                  className="text-xs text-slate-400 hover:text-white transition cursor-pointer"
+                  className="text-xs text-slate-400 hover:text-slate-600 font-semibold transition cursor-pointer"
                 >
                   Quay lại Trang Chủ Công Khai
                 </button>
@@ -954,9 +1031,35 @@ export default function App() {
       
       {/* Sidebar Navigation - Visible on desktop */}
       <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 hidden md:flex h-full select-none shadow-sm">
-        <div className="p-8">
+        <div className="p-8 pb-4 text-left">
           <h1 className="text-2xl font-serif italic text-slate-900 tracking-tight">THPT Nguyễn Hữu Cầu<span className="text-amber-500">.</span></h1>
           <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mt-2 font-bold">HỆ THỐNG QUẢN LÝ</p>
+
+          <div 
+            onClick={() => dbError && setShowDbHelp(true)}
+            className={`mt-4 p-2.5 rounded-xl border text-[10px] flex flex-col gap-1 select-none transition-all duration-300 ${
+              dbError 
+                ? 'bg-rose-50 border-rose-200/60 cursor-pointer hover:bg-rose-100/70' 
+                : 'bg-slate-50 border-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 font-bold">
+              <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+              <span className={dbError ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>
+                {dbError ? 'DỰ PHÒNG CỤC BỘ' : 'ĐỒNG BỘ CLOUD'}
+              </span>
+            </div>
+            <p className="text-[9px] text-slate-500 font-medium leading-relaxed">
+              {dbError 
+                ? 'Không thể ghi vào Firestore. Dữ liệu chỉ đang lưu tạm trên trình duyệt hiện tại.' 
+                : 'Đang liên kết thời gian thực trực tiếp với cơ sở dữ liệu Firebase.'}
+            </p>
+            {dbError && (
+              <span className="text-[9px] font-bold text-blue-600 underline mt-1 block hover:text-blue-800">
+                👉 Click xem cách sửa lỗi kết nối
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="px-5 mb-4 space-y-2">
@@ -1651,6 +1754,84 @@ export default function App() {
         </footer>
       </div>
 
+
+      {/* Modal Hướng dẫn Gỡ lỗi Kết nối Firebase */}
+      {showDbHelp && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn text-left">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full border border-slate-200 shadow-2xl text-slate-800 space-y-4 animate-scaleUp">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
+                <h3 className="text-base font-bold text-slate-900">Tại sao dữ liệu không đồng bộ lên Cloud?</h3>
+              </div>
+              <button 
+                onClick={() => setShowDbHelp(false)}
+                className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-xs space-y-3.5 leading-relaxed text-slate-600">
+              <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                <p className="font-bold text-rose-800 text-[13px] mb-1">💡 Bản chất hiện tượng "Xóa nhưng không đổi trên Console":</p>
+                Do ứng dụng của bạn hiện đang gặp **lỗi kết nối (Timeout)** tới Firebase Cloud, ứng dụng đã tự chuyển sang chế độ **Dự phòng cục bộ (LocalStorage)**. Mọi thao tác Thêm/Sửa/Xóa của bạn chỉ lưu tạm trên trình duyệt này chứ chưa thể gửi lên Cloud. Đó là lý do bạn vào Firebase Console vẫn thấy dữ liệu cũ nguyên vẹn.
+              </div>
+
+              <h4 className="font-extrabold text-[13px] text-slate-900 border-b pb-1">BƯỚC KHẮC PHỤC (Làm lần lượt):</h4>
+
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0 text-[10px]">1</div>
+                  <div>
+                    <p className="font-bold text-slate-800">Khởi tạo Database Firestore trên Firebase Console</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-sans leading-relaxed">
+                      Vào <b>Firebase Console</b> của dự án <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-600">quanlyhs-ba1de</code>, truy cập menu <b>Firestore Database</b> và đảm bảo bạn đã nhấn nút <b>"Create database"</b> (để tạo cơ sở dữ liệu mặc định <code className="bg-slate-100 px-1 py-0.5 rounded text-rose-600">(default)</code>). Nếu chưa nhấn nút này, CSDL của bạn chưa tồn tại nên kết nối sẽ bị treo vĩnh viễn.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0 text-[10px]">2</div>
+                  <div>
+                    <p className="font-bold text-slate-800">Chạy ngoài iFrame Sandbox của AI Studio</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-sans leading-relaxed">
+                      Khung xem trước của AI Studio chạy dưới dạng một <b>iframe sandbox</b> bị hạn chế một số giao thức mạng. Anh hãy click mở ứng dụng trong một tab trình duyệt mới hoàn toàn bằng URL sau để giải quyết triệt để chặn iFrame:
+                      <a 
+                        href="https://ais-dev-6h5yfbnspjsjktqujkvky4-1079685014421.asia-southeast1.run.app" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-blue-600 underline font-semibold block mt-1 break-all hover:text-blue-800"
+                      >
+                        👉 Click mở ứng dụng ở tab mới (Bản Dev)
+                      </a>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0 text-[10px]">3</div>
+                  <div>
+                    <p className="font-bold text-slate-800">Kiểm tra Adblocker hoặc Tường lửa (Firewall)</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-sans leading-relaxed">
+                      Nếu dùng mạng cơ quan/trường học hoặc có các extension chặn quảng cáo, các luồng WebSocket của Firebase có thể bị chặn. Hãy thử tạm tắt Adblock hoặc chuyển sang mạng 4G/Wifi khác rồi tải lại trang để kiểm tra.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t flex justify-end">
+              <button 
+                onClick={() => setShowDbHelp(false)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Tôi đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
