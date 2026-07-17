@@ -1,10 +1,9 @@
 {
-  "projectId": "quanlyhs-ba1de",
-  "appId": "1:780837755113:web:5cc48acc6b330161a97878",
-  "apiKey": "AIzaSyC0IUD9j2x3f4A5DR23k_5XH7gS_-HwMf4",
-  "authDomain": "quanlyhs-ba1de.firebaseapp.com",
-  "storageBucket": "quanlyhs-ba1de.firebasestorage.app",
-  "messagingSenderId": "780837755113",
-  "measurementId": "G-B6WEMN088X",
-  "firestoreDatabaseId": ""
+  "projectId": "fleet-realm-5k91c",
+  "appId": "1:850191185866:web:de6f5ba49cf87f3f274133",
+  "apiKey": "AIzaSyCX7j5vVQ7-3mFp6KTqBQpFL1coU7oKA98",
+  "authDomain": "fleet-realm-5k91c.firebaseapp.com",
+  "storageBucket": "fleet-realm-5k91c.firebasestorage.app",
+  "messagingSenderId": "850191185866",
+  "firestoreDatabaseId": "ai-studio-qunlhcsinh-b753f283-6203-4b78-895e-599daa91e793"
 }
