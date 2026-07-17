@@ -6,13 +6,11 @@
 import React, { useState, useEffect } from 'react';
 import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser } from './types';
 import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers } from './data/initialData';
-import { pushToGoogleSheets, fetchFromGoogleSheets, createNewSpreadsheet } from './services/sheetsService';
 import StudentManager from './components/StudentManager';
 import DiligenceManager from './components/DiligenceManager';
 import WeeklyPlanner from './components/WeeklyPlanner';
 import TaskManager from './components/TaskManager';
 import AcademicManager from './components/AcademicManager';
-import SpreadsheetSync from './components/SpreadsheetSync';
 import SystemSettings from './components/SystemSettings';
 import ClassManager from './components/ClassManager';
 import PublicPortal from './components/PublicPortal';
@@ -548,80 +546,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('app_sync_config', JSON.stringify(config));
   }, [config]);
-
-  // Sheets Synchronization Handlers
-  const handlePushToSheets = async () => {
-    if (!config.spreadsheetId || !config.accessToken) {
-      throw new Error('Chưa điền Spreadsheet ID hoặc Access Token ở tab Đồng bộ.');
-    }
-    await pushToGoogleSheets(config.spreadsheetId, config.accessToken, {
-      teachers,
-      schoolYears,
-      classes,
-      students,
-      violations,
-      plans,
-      tasks,
-      violationTypes,
-      academicUpdates,
-      settings: {
-        activeSchoolYearId,
-        activeClassId
-      }
-    });
-    setConfig(prev => ({ ...prev, lastSync: new Date().toLocaleString('vi-VN') }));
-  };
-
-  const handleFetchFromSheets = async () => {
-    if (!config.spreadsheetId || !config.accessToken) {
-      throw new Error('Chưa điền Spreadsheet ID hoặc Access Token ở tab Đồng bộ.');
-    }
-    const data = await fetchFromGoogleSheets(config.spreadsheetId, config.accessToken);
-    if (data.teachers) setTeachers(data.teachers);
-    if (data.schoolYears) setSchoolYears(data.schoolYears);
-    if (data.classes) setClasses(data.classes);
-    if (data.students) setStudents(data.students);
-    if (data.violations) setViolations(data.violations);
-    if (data.plans) setPlans(data.plans);
-    if (data.tasks) setTasks(data.tasks);
-    if (data.violationTypes) setViolationTypes(data.violationTypes);
-    if (data.academicUpdates) setAcademicUpdates(data.academicUpdates);
-    if (data.settings) {
-      if (data.settings.activeSchoolYearId) setActiveSchoolYearId(data.settings.activeSchoolYearId);
-      if (data.settings.activeClassId) setActiveClassId(data.settings.activeClassId);
-    }
-    setConfig(prev => ({ ...prev, lastSync: new Date().toLocaleString('vi-VN') }));
-  };
-
-  const handleCreateNewSheet = async () => {
-    if (!config.accessToken) {
-      throw new Error('Vui lòng nhập Google Access Token trước.');
-    }
-    const id = await createNewSpreadsheet(config.accessToken, `Quản lý Học sinh - ${className}`);
-    setConfig(prev => ({
-      ...prev,
-      spreadsheetId: id,
-      useLocalStorage: false,
-      lastSync: new Date().toLocaleString('vi-VN')
-    }));
-    // Instantly sync local data up
-    await pushToGoogleSheets(id, config.accessToken, {
-      teachers,
-      schoolYears,
-      classes,
-      students,
-      violations,
-      plans,
-      tasks,
-      violationTypes,
-      academicUpdates,
-      settings: {
-        activeSchoolYearId,
-        activeClassId
-      }
-    });
-    return id;
-  };
 
   // State modifiers
   const handleAddStudent = (s: Student) => {
@@ -1700,11 +1624,6 @@ export default function App() {
                 onUpdateActiveClassId={setActiveClassId}
                 violationTypes={violationTypes}
                 onUpdateViolationTypes={handleUpdateViolationTypes}
-                config={config}
-                onUpdateConfig={handleUpdateConfig}
-                onPushToSheets={handlePushToSheets}
-                onFetchFromSheets={handleFetchFromSheets}
-                onCreateNewSheet={handleCreateNewSheet}
                 students={students}
                 onUpdateStudents={handleUpdateStudents}
                 violations={violations}
