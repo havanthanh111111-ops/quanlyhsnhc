@@ -39,6 +39,7 @@ export interface Student {
   groupName?: string; // e.g. "Tổ 1"
   seatRow?: number; // Row index (1-based or 0-based, let's say 1-based or 0-based)
   seatCol?: number; // Col index
+  role?: string; // Class officers / roles, e.g. "Lớp trưởng", "Tổ trưởng Tổ 1"
 }
 
 export interface ViolationType {

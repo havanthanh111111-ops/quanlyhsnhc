@@ -58,6 +58,14 @@ import {
   Legend 
 } from 'recharts';
 
+const getStudentAvatarUrl = (avatarUrl: string | undefined): string => {
+  if (!avatarUrl) return '';
+  if (avatarUrl.startsWith('data:image/') || avatarUrl.startsWith('blob:') || (avatarUrl.startsWith('http') && !avatarUrl.includes('drive.google.com'))) {
+    return avatarUrl;
+  }
+  return avatarUrl.replace('/view?usp=drivesdk', '').replace('file/d/', 'uc?export=view&id=');
+};
+
 interface PublicPortalProps {
   schoolYears: SchoolYear[];
   students: Student[];
@@ -147,7 +155,7 @@ export default function PublicPortal({
   const [timetable, setTimetable] = useState<Array<{ day: string; period: number; session: 'Sáng' | 'Chiều'; subject: string }>>([]);
 
   // Sub-tabs state for Timetable & Activities
-  const [timetableSubTab, setTimetableSubTab] = useState<'groups' | 'seating' | 'timetable' | 'reminders' | 'duty'>('groups');
+  const [timetableSubTab, setTimetableSubTab] = useState<'groups' | 'organization' | 'seating' | 'timetable' | 'reminders' | 'duty'>('groups');
 
   // Selected date for "Dặn dò hàng ngày" and "Bảng theo dõi học tập"
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -653,38 +661,50 @@ export default function PublicPortal({
 
   // 3. Seating Chart Grid representation
   const renderSeatingChart = (student: Student) => {
-    const rows = 5;
-    const cols = 4;
-    
     const seatRow = student.seatRow !== undefined ? student.seatRow : -1;
     const seatCol = student.seatCol !== undefined ? student.seatCol : -1;
+
+    // Find all students in the same class to determine the actual classroom grid size dynamically
+    const classStudents = students.filter(s => s.classId === student.classId);
+    const activeRows = Math.max(5, ...classStudents.filter(s => s.seatRow !== undefined).map(s => s.seatRow! + 1), seatRow + 1);
+    const activeCols = Math.max(4, ...classStudents.filter(s => s.seatCol !== undefined).map(s => s.seatCol! + 1), seatCol + 1);
 
     return (
       <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
         <h4 className="text-xs font-bold text-slate-700 mb-3 uppercase tracking-wider">SƠ ĐỒ BÀN HỌC TRONG LỚP</h4>
         <div className="bg-slate-300 h-2 w-2/3 mx-auto mb-6 rounded-md text-[9px] text-slate-600 font-bold flex items-center justify-center uppercase">BẢNG GIẢNG ĐƯỜNG</div>
         
-        <div className="grid grid-cols-4 gap-2.5 max-w-[280px] mx-auto">
-          {Array.from({ length: rows }).map((_, rIndex) => (
-            Array.from({ length: cols }).map((_, cIndex) => {
-              const isHisSeat = (seatRow === rIndex && seatCol === cIndex);
-              return (
-                <div 
-                  key={`${rIndex}-${cIndex}`}
-                  className={`p-2 rounded-lg text-[9px] font-bold text-center border transition flex flex-col items-center justify-center h-12 ${
-                    isHisSeat 
-                      ? 'bg-blue-600 border-blue-700 text-white shadow-md animate-pulse ring-2 ring-blue-300' 
-                      : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100'
-                  }`}
-                >
-                  <Grid size={10} className={isHisSeat ? 'text-white' : 'text-slate-300'} />
-                  <span className="mt-1">
-                    {isHisSeat ? 'BẠN' : `H-${rIndex+1}, C-${cIndex+1}`}
-                  </span>
-                </div>
-              );
-            })
-          ))}
+        {/* Scrollable Container with horizontal and vertical scrollbars */}
+        <div className="overflow-auto max-h-[300px] max-w-full pb-3 px-1 custom-scrollbar border border-slate-200/40 rounded-xl bg-white/50">
+          <div 
+            className="grid gap-2.5 mx-auto pt-2"
+            style={{
+              gridTemplateColumns: `repeat(${activeCols}, minmax(68px, 1fr))`,
+              width: 'max-content',
+              maxWidth: '100%'
+            }}
+          >
+            {Array.from({ length: activeRows }).map((_, rIndex) => (
+              Array.from({ length: activeCols }).map((_, cIndex) => {
+                const isHisSeat = (seatRow === rIndex && seatCol === cIndex);
+                return (
+                  <div 
+                    key={`${rIndex}-${cIndex}`}
+                    className={`p-2 rounded-lg text-[9px] font-bold text-center border transition flex flex-col items-center justify-center h-12 ${
+                      isHisSeat 
+                        ? 'bg-blue-600 border-blue-700 text-white shadow-md animate-pulse ring-2 ring-blue-300' 
+                        : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Grid size={10} className={isHisSeat ? 'text-white' : 'text-slate-300'} />
+                    <span className="mt-1">
+                      {isHisSeat ? 'BẠN' : `H-${rIndex+1}, C-${cIndex+1}`}
+                    </span>
+                  </div>
+                );
+              })
+            ))}
+          </div>
         </div>
         <p className="text-[10px] text-slate-500 mt-3 font-semibold">
           {seatRow !== -1 ? `Vị trí: Hàng dọc ${seatRow + 1}, Cột dọc ${seatCol + 1}` : 'Chưa xếp chỗ ngồi cố định'}
@@ -1111,48 +1131,93 @@ export default function PublicPortal({
           {activeTab === 'lookup' && (
             <div className="space-y-6 animate-fadeIn">
               
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
-                    <Search size={16} className="text-blue-600" /> BỘ LỌC TRA CỨU HỌC SINH
-                  </h3>
-                  <p className="text-[11px] text-slate-400">Chọn lớp và nhập họ tên hoặc mã học sinh để tìm kiếm nhanh sơ đồ bàn học, nhiệm vụ và nề nếp.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Chọn lớp học <span className="text-rose-500">*</span></label>
-                    <select
-                      value={selectedClassId}
-                      onChange={(e) => {
-                        updateSelectedClass(e.target.value);
-                        setSelectedStudent(null);
-                      }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
-                    >
-                      {classes.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* CARD 1: FILTER */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4 lg:col-span-2">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
+                      <Search size={16} className="text-blue-600" /> BỘ LỌC TRA CỨU HỌC SINH
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Chọn lớp và nhập họ tên hoặc mã học sinh để tìm kiếm nhanh sơ đồ bàn học, nhiệm vụ và nề nếp.</p>
                   </div>
 
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Tên hoặc mã số học sinh</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={searchQuery}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Chọn lớp học <span className="text-rose-500">*</span></label>
+                      <select
+                        value={selectedClassId}
                         onChange={(e) => {
-                          setSearchQuery(e.target.value);
+                          updateSelectedClass(e.target.value);
                           setSelectedStudent(null);
                         }}
-                        placeholder="Ví dụ: Nguyễn Văn A, HS01..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
-                      />
-                      <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
+                      >
+                        {classes.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Tên hoặc mã số học sinh</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setSelectedStudent(null);
+                          }}
+                          placeholder="Ví dụ: Nguyễn Văn A, HS01..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-600"
+                        />
+                        <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                {/* CARD 2: CLASS SUMMARY */}
+                {(() => {
+                  const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
+                  const selectedClassStudents = allStudents.filter(s => s.classId === (selectedClass?.id || ''));
+                  const totalStudents = selectedClassStudents.length;
+                  const femaleStudents = selectedClassStudents.filter(s => s.gender === 'Nữ').length;
+                  const maleStudents = selectedClassStudents.filter(s => s.gender === 'Nam').length;
+                  const classTeacher = teachers.find(t => t.id === selectedClass?.teacherId);
+                  const teacherName = classTeacher ? classTeacher.name : 'Chưa phân công';
+
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-center space-y-4">
+                      <div className="space-y-3">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-black text-slate-400 uppercase tracking-wider">Lớp :</span>
+                          <span className="text-2xl font-black text-blue-900">{selectedClass?.name || '---'}</span>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-bold text-slate-700">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-400 uppercase tracking-wider text-[10px]">Sỉ số :</span>
+                            <span className="text-slate-800 text-sm font-black">{totalStudents}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-pink-500 uppercase tracking-wider text-[10px]">Nữ :</span>
+                            <span className="text-pink-600 text-sm font-black">{femaleStudents}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-blue-500 uppercase tracking-wider text-[10px]">Nam :</span>
+                            <span className="text-blue-600 text-sm font-black">{maleStudents}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-baseline gap-2 pt-1 border-t border-slate-100">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">GVCN :</span>
+                          <span className="text-sm font-black text-slate-800">{teacherName}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* SEARCH RESULTS LIST */}
@@ -1204,9 +1269,18 @@ export default function PublicPortal({
                     {/* Column 1: Basic Profile */}
                     <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
                       <div className="text-center space-y-3 pb-4 border-b border-slate-100">
-                        <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 font-black text-lg mx-auto flex items-center justify-center border-2 border-blue-200 shadow-sm">
-                          {selectedStudent.name.split(' ').pop()?.slice(0, 2).toUpperCase()}
-                        </div>
+                        {selectedStudent.avatarUrl ? (
+                          <img
+                            src={getStudentAvatarUrl(selectedStudent.avatarUrl)}
+                            alt={selectedStudent.name}
+                            className="w-16 h-16 rounded-full mx-auto object-cover border-2 border-blue-200 shadow-sm"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 font-black text-lg mx-auto flex items-center justify-center border-2 border-blue-200 shadow-sm">
+                            {selectedStudent.name.split(' ').pop()?.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         <div>
                           <h4 className="text-sm font-black text-slate-800 uppercase tracking-wide">{selectedStudent.name}</h4>
                           <p className="text-[10px] text-blue-600 font-extrabold uppercase mt-0.5">{selectedStudent.id}</p>
@@ -1982,6 +2056,18 @@ export default function PublicPortal({
                   </button>
 
                   <button
+                    onClick={() => setTimetableSubTab('organization')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      timetableSubTab === 'organization'
+                        ? 'bg-white text-blue-900 shadow-sm border border-slate-200/50 font-black'
+                        : 'text-slate-600 hover:bg-slate-100/50 hover:text-slate-900'
+                    }`}
+                  >
+                    <User size={14} className={timetableSubTab === 'organization' ? 'text-blue-600' : 'text-slate-500'} />
+                    <span>Sơ đồ Tổ chức</span>
+                  </button>
+
+                  <button
                     onClick={() => setTimetableSubTab('seating')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
                       timetableSubTab === 'seating'
@@ -2030,6 +2116,210 @@ export default function PublicPortal({
 
                 {/* SubTab contents */}
                 <div className="pt-2">
+
+                  {/* SUBTAB: SƠ ĐỒ TỔ CHỨC */}
+                  {timetableSubTab === 'organization' && (() => {
+                    const classStudents = students.filter(s => s.classId === timetableClassId && (s.status === 'Đang học' || !s.status));
+                    const currentClassItem = classes.find(c => c.id === timetableClassId);
+                    const currentTeacher = currentClassItem ? teachers.find(t => t.id === currentClassItem.teacherId) : null;
+                    const teacherName = currentTeacher ? currentTeacher.name : 'Chưa phân công';
+
+                    // Find key officers
+                    const classLeader = classStudents.find(s => s.role === 'Lớp trưởng');
+                    const classDeputies = classStudents.filter(s => s.role && s.role.startsWith('Lớp phó'));
+                    const classSecretary = classStudents.find(s => s.role === 'Bí thư Chi đoàn');
+                    const classTreasurer = classStudents.find(s => s.role === 'Thủ quỹ');
+                    const otherBCSOfficers = classStudents.filter(s => 
+                      s.role && 
+                      s.role !== 'Lớp trưởng' && 
+                      !s.role.startsWith('Lớp phó') && 
+                      s.role !== 'Bí thư Chi đoàn' && 
+                      s.role !== 'Thủ quỹ' && 
+                      !s.role.startsWith('Tổ trưởng') && 
+                      !s.role.startsWith('Tổ phó')
+                    );
+
+                    return (
+                      <div className="space-y-8 py-4 animate-fadeIn select-none">
+                        {/* 1. TOP TIER: GVCN */}
+                        <div className="flex flex-col items-center">
+                          <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-6 py-4 rounded-3xl shadow-md border border-amber-400 text-center w-64">
+                            <span className="text-[9px] font-black tracking-wider uppercase bg-black/20 px-2 py-0.5 rounded-full block mx-auto w-max mb-1.5">
+                              GIÁO VIÊN CHỦ NHIỆM
+                            </span>
+                            <h4 className="text-sm font-black tracking-tight">{teacherName}</h4>
+                            <span className="text-[10px] opacity-85 block mt-0.5">Quản lý & Hướng dẫn</span>
+                          </div>
+                          
+                          {/* Vertical Connector */}
+                          <div className="w-0.5 h-8 bg-slate-200 mt-1"></div>
+                        </div>
+
+                        {/* 2. MIDDLE TIER: BCS LỚP */}
+                        <div className="flex flex-col items-center">
+                          <div className="bg-slate-100 border border-slate-200/80 p-5 rounded-3xl w-full max-w-4xl shadow-sm relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-3 py-0.5 rounded-full text-[9px] font-extrabold tracking-widest uppercase">
+                              BAN CÁN SỰ LỚP
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                              {/* Lớp Trưởng Column */}
+                              <div className="bg-white p-4 rounded-2xl border border-blue-100 flex flex-col items-center justify-center text-center shadow-xs">
+                                <span className="text-[9px] font-extrabold text-blue-600 tracking-wider uppercase mb-1">Lớp Trưởng</span>
+                                {classLeader ? (
+                                  <>
+                                    <h5 className="text-xs font-black text-slate-800">{classLeader.name}</h5>
+                                    <span className="text-[9px] text-slate-400 font-mono mt-0.5">{classLeader.id}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">Chưa phân công</span>
+                                )}
+                              </div>
+
+                              {/* Lớp Phó Column */}
+                              <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-xs md:col-span-1">
+                                <span className="text-[9px] font-extrabold text-emerald-600 tracking-wider uppercase mb-1">Các Lớp Phó</span>
+                                {classDeputies.length > 0 ? (
+                                  <div className="space-y-1 w-full">
+                                    {classDeputies.map(dep => (
+                                      <div key={dep.id} className="text-xs">
+                                        <span className="font-extrabold text-slate-700">{dep.name}</span>
+                                        <span className="text-[9px] text-slate-400 block font-medium">({dep.role})</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">Chưa phân công</span>
+                                )}
+                              </div>
+
+                              {/* Đoàn Thể & Thủ Quỹ Column */}
+                              <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col items-center justify-center text-center shadow-xs">
+                                <span className="text-[9px] font-extrabold text-purple-600 tracking-wider uppercase mb-1">Đoàn thể & Tài chính</span>
+                                <div className="space-y-2 w-full text-xs">
+                                  {classSecretary && (
+                                    <div>
+                                      <span className="font-extrabold text-slate-700">{classSecretary.name}</span>
+                                      <span className="text-[9px] text-slate-400 block font-medium">(Bí thư Chi đoàn)</span>
+                                    </div>
+                                  )}
+                                  {classTreasurer && (
+                                    <div>
+                                      <span className="font-extrabold text-slate-700">{classTreasurer.name}</span>
+                                      <span className="text-[9px] text-slate-400 block font-medium">(Thủ quỹ)</span>
+                                    </div>
+                                  )}
+                                  {!classSecretary && !classTreasurer && (
+                                    <span className="text-xs text-slate-400 italic">Chưa phân công</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Custom Other Titles list if exists */}
+                            {otherBCSOfficers.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Chức danh Ban cán sự khác</span>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                  {otherBCSOfficers.map(off => (
+                                    <span key={off.id} className="px-2.5 py-1 bg-slate-50 border border-slate-200/60 rounded-xl text-[10px] text-slate-600 font-semibold shadow-2xs">
+                                      {off.name} <strong className="text-blue-600 font-extrabold">({off.role})</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Vertical Connector */}
+                          <div className="w-0.5 h-8 bg-slate-200 mt-1"></div>
+                        </div>
+
+                        {/* 3. BOTTOM TIER: TỔ TRƯỞNG & THÀNH VIÊN TỔ */}
+                        <div className="space-y-4">
+                          <div className="text-center">
+                            <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase">
+                              BAN CÁN SỰ TỔ & THÀNH VIÊN
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].map((gName, idx) => {
+                              const groupStudents = classStudents.filter(s => s.groupName === gName);
+                              
+                              // Find organization roles for this specific group
+                              const tTruong = groupStudents.find(s => s.role === `Tổ trưởng ${gName}`);
+                              const tPho = groupStudents.find(s => s.role === `Tổ phó ${gName}`);
+                              const members = groupStudents.filter(s => s.id !== tTruong?.id && s.id !== tPho?.id);
+
+                              const colors = [
+                                { bg: 'bg-blue-50/20 border-blue-100', text: 'text-blue-800', headerBg: 'bg-blue-600' },
+                                { bg: 'bg-emerald-50/20 border-emerald-100', text: 'text-emerald-800', headerBg: 'bg-emerald-600' },
+                                { bg: 'bg-purple-50/20 border-purple-100', text: 'text-purple-800', headerBg: 'bg-purple-600' },
+                                { bg: 'bg-rose-50/20 border-rose-100', text: 'text-rose-800', headerBg: 'bg-rose-600' },
+                              ];
+                              const c = colors[idx];
+
+                              return (
+                                <div key={gName} className={`border rounded-2xl p-4 shadow-2xs space-y-4 ${c.bg}`}>
+                                  {/* Group Title Badge */}
+                                  <div className="text-center pb-2 border-b border-slate-100">
+                                    <span className={`inline-block text-white px-3 py-0.5 rounded-full text-[9px] font-black tracking-widest uppercase ${c.headerBg}`}>
+                                      {gName}
+                                    </span>
+                                  </div>
+
+                                  {/* Tổ Trưởng / Tổ Phó Cards */}
+                                  <div className="space-y-2">
+                                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-3xs flex flex-col items-center text-center">
+                                      <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider mb-0.5">Tổ Trưởng</span>
+                                      {tTruong ? (
+                                        <>
+                                          <span className="text-xs font-black text-slate-800">{tTruong.name}</span>
+                                          <span className="text-[9px] text-slate-400 font-mono mt-0.5">{tTruong.id}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-slate-400 italic">Chưa phân công</span>
+                                      )}
+                                    </div>
+
+                                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-3xs flex flex-col items-center text-center">
+                                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-wider mb-0.5">Tổ Phó</span>
+                                      {tPho ? (
+                                        <>
+                                          <span className="text-xs font-black text-slate-700">{tPho.name}</span>
+                                          <span className="text-[9px] text-slate-400 font-mono mt-0.5">{tPho.id}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-slate-400 italic">Chưa phân công</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Other Group Members */}
+                                  <div className="space-y-1.5">
+                                    <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest block text-center">Thành viên tổ</span>
+                                    {members.length > 0 ? (
+                                      <div className="bg-white/40 border border-slate-100 rounded-xl p-2.5 max-h-48 overflow-y-auto space-y-1 scrollbar-none">
+                                        {members.map(mem => (
+                                          <div key={mem.id} className="text-[11px] text-slate-600 font-medium py-1 px-1.5 bg-white/80 rounded-lg flex justify-between items-center shadow-3xs">
+                                            <span className="truncate">{mem.name}</span>
+                                            <span className="text-[8px] font-mono text-slate-400">{mem.id}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400 italic block text-center py-1">Trống</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* SUBTAB: DANH SÁCH TỔ */}
                   {timetableSubTab === 'groups' && (
@@ -2097,7 +2387,7 @@ export default function PublicPortal({
                           </div>
 
                           {/* Seating Grid Map */}
-                          <div className="w-full overflow-x-auto custom-scrollbar pb-2">
+                          <div className="w-full overflow-auto custom-scrollbar max-h-[500px] pb-2">
                             <div 
                               className="grid gap-3.5 mx-auto"
                               style={{

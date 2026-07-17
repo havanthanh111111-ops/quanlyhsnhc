@@ -14,6 +14,9 @@ import { getAccessToken, googleSignIn } from '../services/authService';
 
 const getDriveImageUrl = (urlOrId: string | undefined): string => {
   if (!urlOrId) return '';
+  if (urlOrId.startsWith('data:image/') || urlOrId.startsWith('blob:') || (urlOrId.startsWith('http') && !urlOrId.includes('drive.google.com'))) {
+    return urlOrId;
+  }
   if (urlOrId.includes('lh3.googleusercontent.com') || urlOrId.includes('drive.google.com/thumbnail')) {
     return urlOrId;
   }
@@ -142,7 +145,7 @@ export default function StudentManager({
 
   // States for CSV Import
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
-  const [parsedCsvStudents, setParsedCsvStudents] = useState<Omit<Student, 'id'>[]>([]);
+  const [parsedCsvStudents, setParsedCsvStudents] = useState<Student[]>([]);
   const [csvParseError, setCsvParseError] = useState<string | null>(null);
 
   // States for Class Transfer Side-by-Side Interface (Vietnamese labels matched to drawings)
@@ -205,6 +208,7 @@ export default function StudentManager({
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const reportPdfRef = useRef<HTMLDivElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // PDF download fallback state
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
@@ -395,98 +399,67 @@ export default function StudentManager({
     }
   };
 
-  const handleUploadImage = async (studentId: string, file: File) => {
-    const token = getAccessToken();
-    if (!token) {
-      alert('Vui lòng qua mục "Đồng bộ Google Sheets" và thực hiện "Kết nối tự động bằng Google" trước để cấp quyền cho ứng dụng tải ảnh lên Google Drive của bạn.');
-      return;
-    }
+  const compressAndResizeImage = (file: File, maxWidth = 300, maxHeight = 400): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(compressedBase64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleUploadImage = async (studentId: string, file: File) => {
     setUploadingStudentId(studentId);
     try {
-      const metadata: any = {
-        name: `avatar_${studentId}_${Date.now()}`,
-        mimeType: file.type,
-      };
-      if (imageFolderId && imageFolderId.trim()) {
-        metadata.parents = [imageFolderId.trim()];
-      }
-
-      const boundary = 'foo_bar_baz';
-      const delimiter = `\r\n--${boundary}\r\n`;
-      const close_delim = `\r\n--${boundary}--`;
-
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = (e) => reject(e);
-      });
-
-      const multipartRequestBody =
-        delimiter +
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter +
-        `Content-Type: ${file.type}\r\n` +
-        'Content-Transfer-Encoding: base64\r\n\r\n' +
-        base64Data +
-        close_delim;
-
-      const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': `multipart/related; boundary=${boundary}`,
-          },
-          body: multipartRequestBody,
-        }
-      );
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || 'Lỗi tải ảnh lên Google Drive');
-      }
-
-      const uploadResult = await response.json();
-      const fileId = uploadResult.id;
-
-      if (!fileId) {
-        throw new Error('Không nhận được ID file sau khi upload.');
-      }
-
-      await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          role: 'reader',
-          type: 'anyone',
-        }),
-      });
-
-      const publicLink = `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`;
+      // Compress/resize the photo to ensure it is lightweight (< 30KB) for cloud DB storage
+      const base64DataUrl = await compressAndResizeImage(file);
 
       if (formId === studentId) {
-        setFormAvatarUrl(publicLink);
+        setFormAvatarUrl(base64DataUrl);
       }
 
       const currentStudent = students.find(s => s.id === studentId);
       if (currentStudent) {
         const updated: Student = {
           ...currentStudent,
-          avatarUrl: publicLink,
+          avatarUrl: base64DataUrl,
         };
         onUpdateStudent(updated);
       }
-      alert('Tải ảnh lên Google Drive thành công! Ảnh chân dung đã được liên kết và sẵn sàng để đồng bộ.');
+      alert('Tải ảnh chân dung thành công! Ảnh đã được lưu trữ trực tiếp trên cơ sở dữ liệu đám mây.');
     } catch (err: any) {
       console.error('Lỗi upload ảnh:', err);
       alert('Không thể tải ảnh lên: ' + (err.message || err));
@@ -577,7 +550,7 @@ export default function StudentManager({
     reader.readAsText(file, 'UTF-8');
   };
 
-  const parseCsvContent = (text: string): Omit<Student, 'id'>[] => {
+  const parseCsvContent = (text: string): Student[] => {
     const lines = text.split(/\r?\n/);
     if (lines.length <= 1) return [];
 
@@ -611,6 +584,7 @@ export default function StudentManager({
     let fatherJobIdx = headers.findIndex(h => h.includes('nghề nghiệp bố') || h.includes('nghề bố') || h.includes('bố làm'));
     let motherNameIdx = headers.findIndex(h => h.includes('mẹ') || h.includes('mother'));
     let motherJobIdx = headers.findIndex(h => h.includes('nghề nghiệp mẹ') || h.includes('nghề mẹ') || h.includes('mẹ làm'));
+    let studentIdIdx = headers.findIndex(h => h.includes('mã học sinh') || h.includes('mã hs') || h.includes('ma hs') || h.includes('ma hoc sinh') || h.includes('id') || h.includes('student id') || h.includes('student_id'));
 
     if (nameIdx === -1) nameIdx = 0;
     if (genderIdx === -1) genderIdx = 1;
@@ -622,7 +596,7 @@ export default function StudentManager({
     if (motherNameIdx === -1) motherNameIdx = 7;
     if (motherJobIdx === -1) motherJobIdx = 8;
 
-    const list: Omit<Student, 'id'>[] = [];
+    const list: Student[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -656,7 +630,13 @@ export default function StudentManager({
         gender = 'Nữ';
       }
 
+      let studentId = '';
+      if (studentIdIdx !== -1 && cols[studentIdIdx]) {
+        studentId = cols[studentIdIdx].trim();
+      }
+
       list.push({
+        id: studentId,
         name: cols[nameIdx],
         gender,
         dob,
@@ -686,15 +666,18 @@ export default function StudentManager({
 
     let added = 0;
     parsedCsvStudents.forEach((stud) => {
-      maxIdNum++;
-      const nextId = `HS${maxIdNum.toString().padStart(3, '0')}`;
+      let finalId = stud.id;
+      if (!finalId) {
+        maxIdNum++;
+        finalId = `HS${maxIdNum.toString().padStart(3, '0')}`;
+      }
       
       const activeClass = classes.find(c => c.id === activeClassId);
       const activeYear = schoolYears.find(y => y.id === activeSchoolYearId);
 
       const newStudent: Student = {
         ...stud,
-        id: nextId,
+        id: finalId,
         classId: activeClassId,
         className: activeClass?.name || '',
         schoolYear: activeYear?.name || '',
@@ -2003,18 +1986,23 @@ export default function StudentManager({
                     <p className="font-semibold text-amber-500">⚠️ Hướng dẫn định dạng tệp CSV:</p>
                     <ul className="list-disc list-inside space-y-1 text-white/70">
                       <li>Tệp CSV nên được mã hóa chuẩn <strong className="text-amber-500">UTF-8</strong> để không bị lỗi chữ tiếng Việt có dấu.</li>
-                      <li>Hệ thống tự động phát hiện cột dựa trên tiêu đề: <strong className="text-amber-500">Họ và Tên, Giới tính, Ngày sinh, SĐT Phụ huynh, Địa chỉ, Họ tên bố, Nghề nghiệp bố, Họ tên mẹ, Nghề nghiệp mẹ</strong>.</li>
-                      <li>Nếu không có dòng tiêu đề, hệ thống sẽ ánh xạ theo thứ tự các cột mặc định.</li>
+                      <li>Hệ thống tự động phát hiện cột dựa trên tiêu đề: <strong className="text-amber-500">Mã học sinh (Mã HS), Họ và Tên, Giới tính, Ngày sinh, SĐT Phụ huynh, Địa chỉ, Họ tên bố, Nghề nghiệp bố, Họ tên mẹ, Nghề nghiệp mẹ</strong>.</li>
+                      <li>Nếu không có dòng tiêu đề hoặc cột <strong className="text-amber-500">Mã học sinh</strong> trống, hệ thống sẽ tự động tạo mã tăng dần (VD: HS001, HS002...).</li>
                       <li>Định dạng ngày sinh chuẩn: <strong className="text-amber-500">YYYY-MM-DD</strong> hoặc <strong className="text-amber-500">DD/MM/YYYY</strong>.</li>
                     </ul>
                   </div>
 
-                  <div className="border-2 border-dashed border-white/10 rounded-2xl p-8 text-center hover:border-amber-500/50 transition cursor-pointer relative group bg-white/5">
+                  <div 
+                    onClick={() => csvInputRef.current?.click()}
+                    className="border-2 border-dashed border-white/10 rounded-2xl p-8 text-center hover:border-amber-500/50 transition cursor-pointer relative group bg-white/5"
+                  >
                     <input 
+                      ref={csvInputRef}
                       type="file" 
                       accept=".csv" 
                       onChange={handleCsvFileChange} 
-                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
                     />
                     <Upload className="mx-auto text-amber-500/60 mb-2 group-hover:scale-110 transition duration-200" size={32} />
                     <p className="text-xs font-semibold text-white">Kéo thả hoặc nhấp để chọn tệp .CSV</p>
@@ -2046,6 +2034,7 @@ export default function StudentManager({
                       <table className="w-full text-left text-[11px] border-collapse">
                         <thead>
                           <tr className="bg-white/5 text-white/60 uppercase text-[9px] tracking-wider border-b border-white/10">
+                            <th className="p-2.5">Mã HS</th>
                             <th className="p-2.5">Họ và Tên</th>
                             <th className="p-2.5">Giới tính</th>
                             <th className="p-2.5">Ngày sinh</th>
@@ -2056,6 +2045,7 @@ export default function StudentManager({
                         <tbody className="divide-y divide-white/10">
                           {parsedCsvStudents.map((stud, idx) => (
                             <tr key={idx} className="hover:bg-white/[0.02] text-white/80">
+                              <td className="p-2.5 font-mono text-amber-500 font-semibold">{stud.id || '(Tự động)'}</td>
                               <td className="p-2.5 font-semibold text-white">{stud.name}</td>
                               <td className="p-2.5">
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${

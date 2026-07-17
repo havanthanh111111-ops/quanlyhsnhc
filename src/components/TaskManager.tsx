@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, StudentTask, WeeklyPlan } from '../types';
-import { Plus, CheckCircle, Clock, Play, Trash2, FileText, Download, TrendingUp, Sparkles, AlertCircle, Award, Edit3 } from 'lucide-react';
+import { Plus, CheckCircle, Clock, Play, Trash2, FileText, Download, TrendingUp, Sparkles, AlertCircle, Award, Edit3, Search } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { CustomConfirmModal } from './CustomConfirmModal';
@@ -77,6 +77,74 @@ export default function TaskManager({
   const [taskStatus, setTaskStatus] = useState<StudentTask['status']>('Chưa bắt đầu');
   const [taskFeedback, setTaskFeedback] = useState('');
 
+  // Selected student IDs for multi-assignment checkboxes
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+
+  // Active students (or all students if read-only for old classes)
+  const activeStudents = isReadOnly ? students : students.filter(s => s.status === 'Đang học');
+
+  // Synchronize dropdown selection with checkbox list
+  useEffect(() => {
+    if (editingTaskId) {
+      setSelectedStudentIds([taskStudentId]);
+    } else {
+      if (taskStudentId === 'Tất cả') {
+        setSelectedStudentIds(activeStudents.map(s => s.id));
+      } else if (taskStudentId.startsWith('Tổ ')) {
+        const groupStudents = activeStudents.filter(s => s.groupName === taskStudentId).map(s => s.id);
+        setSelectedStudentIds(groupStudents);
+      } else if (taskStudentId === 'Tùy chọn') {
+        // Do not reset in case user manually customized
+      } else {
+        setSelectedStudentIds([taskStudentId]);
+      }
+    }
+  }, [editingTaskId, taskStudentId, activeStudents]);
+
+  // Handler for custom checkbox toggle
+  const handleToggleStudent = (studentId: string) => {
+    if (isReadOnly) return;
+    setSelectedStudentIds(prev => {
+      const isChecked = prev.includes(studentId);
+      let updated: string[];
+      if (isChecked) {
+        updated = prev.filter(id => id !== studentId);
+      } else {
+        updated = [...prev, studentId];
+      }
+      
+      // Keep dropdown value in sync with the checked combination
+      if (updated.length === activeStudents.length) {
+        setTaskStudentId('Tất cả');
+      } else {
+        const matchedGroup = ['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].find(g => {
+          const groupStuds = activeStudents.filter(s => s.groupName === g).map(s => s.id);
+          return groupStuds.length > 0 &&
+                 groupStuds.length === updated.length &&
+                 groupStuds.every(id => updated.includes(id));
+        });
+        if (matchedGroup) {
+          setTaskStudentId(matchedGroup);
+        } else if (updated.length === 1) {
+          setTaskStudentId(updated[0]);
+        } else {
+          setTaskStudentId('Tùy chọn');
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Filter student list in the checkbox section based on search query
+  const filteredStudentsInList = useMemo(() => {
+    return activeStudents.filter(s => {
+      const q = studentSearchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q);
+    });
+  }, [activeStudents, studentSearchQuery]);
+
   // Report Form States
   const [reportRange, setReportRange] = useState<'week' | 'hk1' | 'hk2'>('week');
   const [reportWeek, setReportWeek] = useState(() => {
@@ -129,9 +197,6 @@ export default function TaskManager({
   const [filterStudent, setFilterStudent] = useState('Tất cả');
   const [filterStatus, setFilterStatus] = useState('Tất cả');
 
-  // Active students (or all students if read-only for old classes)
-  const activeStudents = isReadOnly ? students : students.filter(s => s.status === 'Đang học');
-
   const handleAddTaskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) {
@@ -143,10 +208,9 @@ export default function TaskManager({
       return;
     }
 
-    const matchedStudent = students.find(s => s.id === taskStudentId);
-    const studentName = taskStudentId === 'Tất cả' ? 'Tất cả học sinh' : (matchedStudent?.name || '');
-
     if (editingTaskId) {
+      const matchedStudent = students.find(s => s.id === taskStudentId);
+      const studentName = taskStudentId === 'Tất cả' ? 'Tất cả học sinh' : (matchedStudent?.name || '');
       const updatedTask: StudentTask = {
         id: editingTaskId,
         studentId: taskStudentId,
@@ -159,27 +223,63 @@ export default function TaskManager({
       };
       onUpdateTask(updatedTask);
       setEditingTaskId(null);
+      alert('Cập nhật nhiệm vụ thành công!');
     } else {
-      // Auto-generate Task ID
-      const nextNum = tasks.length > 0
-        ? Math.max(...tasks.map(t => {
-            const num = parseInt(t.id.replace('NV', ''), 10);
-            return isNaN(num) ? 0 : num;
-          })) + 1
-        : 1;
-      const nextId = `NV${nextNum.toString().padStart(3, '0')}`;
+      if (taskStudentId === 'Tất cả') {
+        const nextNum = tasks.length > 0
+          ? Math.max(...tasks.map(t => {
+              const num = parseInt(t.id.replace('NV', ''), 10);
+              return isNaN(num) ? 0 : num;
+            })) + 1
+          : 1;
+        const nextId = `NV${nextNum.toString().padStart(3, '0')}`;
 
-      const newTask: StudentTask = {
-        id: nextId,
-        studentId: taskStudentId,
-        studentName,
-        taskTitle: taskTitle.trim(),
-        description: taskDesc.trim(),
-        deadline: taskDeadline,
-        status: taskStatus,
-        feedback: taskFeedback.trim()
-      };
-      onAddTask(newTask);
+        const newTask: StudentTask = {
+          id: nextId,
+          studentId: 'Tất cả',
+          studentName: 'Tất cả học sinh',
+          taskTitle: taskTitle.trim(),
+          description: taskDesc.trim(),
+          deadline: taskDeadline,
+          status: taskStatus,
+          feedback: taskFeedback.trim()
+        };
+        onAddTask(newTask);
+        alert('Đã giao nhiệm vụ thành công cho toàn bộ lớp!');
+      } else {
+        if (selectedStudentIds.length === 0) {
+          alert('Vui lòng chọn ít nhất một học sinh để giao nhiệm vụ!');
+          return;
+        }
+
+        let nextNum = tasks.length > 0
+          ? Math.max(...tasks.map(t => {
+              const num = parseInt(t.id.replace('NV', ''), 10);
+              return isNaN(num) ? 0 : num;
+            })) + 1
+          : 1;
+
+        selectedStudentIds.forEach(id => {
+          const matchedStudent = students.find(s => s.id === id);
+          if (matchedStudent) {
+            const nextId = `NV${nextNum.toString().padStart(3, '0')}`;
+            const newTask: StudentTask = {
+              id: nextId,
+              studentId: id,
+              studentName: matchedStudent.name,
+              taskTitle: taskTitle.trim(),
+              description: taskDesc.trim(),
+              deadline: taskDeadline,
+              status: taskStatus,
+              feedback: taskFeedback.trim()
+            };
+            onAddTask(newTask);
+            nextNum++;
+          }
+        });
+
+        alert(`Đã giao nhiệm vụ thành công cho ${selectedStudentIds.length} học sinh!`);
+      }
     }
 
     // Reset task form
@@ -188,6 +288,8 @@ export default function TaskManager({
     setTaskStatus('Chưa bắt đầu');
     setTaskFeedback('');
     setTaskStudentId('Tất cả');
+    setSelectedStudentIds([]);
+    setStudentSearchQuery('');
   };
 
   const handleEditTaskClick = (task: StudentTask) => {
@@ -212,6 +314,8 @@ export default function TaskManager({
     setTaskStatus('Chưa bắt đầu');
     setTaskFeedback('');
     setTaskStudentId('Tất cả');
+    setSelectedStudentIds([]);
+    setStudentSearchQuery('');
   };
 
   const handleUpdateStatus = (task: StudentTask, newStatus: StudentTask['status']) => {
@@ -385,7 +489,7 @@ export default function TaskManager({
         /* TASK ASSIGNMENT INTERFACE */
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 animate-fadeIn">
           {/* Add Task Form */}
-          <div className="xl:col-span-4 bg-[#111] rounded-3xl border border-white/5 shadow-lg p-5 h-fit">
+          <div className="xl:col-span-5 bg-[#111] rounded-3xl border border-white/5 shadow-lg p-5 h-fit">
             <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2 uppercase tracking-wider">
               <Sparkles size={16} className="text-amber-500" /> {editingTaskId ? 'Cập nhật nhiệm vụ' : 'Thêm nhiệm vụ mới'}
             </h3>
@@ -400,69 +504,157 @@ export default function TaskManager({
             )}
 
             <form onSubmit={handleAddTaskSubmit} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Học sinh phụ trách</label>
-                <select
-                  id="task-student-select"
-                  value={taskStudentId}
-                  disabled={isReadOnly}
-                  onChange={(e) => setTaskStudentId(e.target.value)}
-                  className="w-full text-xs bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                >
-                  <option value="Tất cả" className="bg-[#111]">-- Giao cho Tất cả lớp học --</option>
-                  {activeStudents.map(s => (
-                    <option key={s.id} value={s.id} className="bg-[#111]">{s.name} ({s.id})</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* Left Column: Task Fields */}
+                <div className="md:col-span-7 space-y-4">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Tiêu đề nhiệm vụ <span className="text-rose-500">*</span></label>
+                    <input
+                      id="task-title-input"
+                      type="text"
+                      required
+                      disabled={isReadOnly}
+                      placeholder="VD: Làm đề cương Lý học kỳ II..."
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Hạn hoàn thành</label>
+                    <input
+                      id="task-deadline-input"
+                      type="date"
+                      required
+                      disabled={isReadOnly}
+                      value={taskDeadline}
+                      onChange={(e) => setTaskDeadline(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 font-mono disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Mô tả chi tiết yêu cầu</label>
+                    <textarea
+                      id="task-desc-textarea"
+                      placeholder="Nội dung cần chuẩn bị, tài liệu hướng dẫn..."
+                      rows={5}
+                      value={taskDesc}
+                      disabled={isReadOnly}
+                      onChange={(e) => setTaskDesc(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 resize-none placeholder-white/20 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Assignee Dropdown & Checklist */}
+                <div className="md:col-span-5 space-y-3 flex flex-col">
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Chọn nhanh theo nhóm</label>
+                    <select
+                      id="task-student-select"
+                      value={taskStudentId}
+                      disabled={isReadOnly}
+                      onChange={(e) => setTaskStudentId(e.target.value)}
+                      className="w-full text-xs bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    >
+                      <option value="Tất cả" className="bg-[#111]">-- Giao cho Tất cả lớp học --</option>
+                      <option value="Tổ 1" className="bg-[#111]">-- Tất cả thành viên Tổ 1 --</option>
+                      <option value="Tổ 2" className="bg-[#111]">-- Tất cả thành viên Tổ 2 --</option>
+                      <option value="Tổ 3" className="bg-[#111]">-- Tất cả thành viên Tổ 3 --</option>
+                      <option value="Tổ 4" className="bg-[#111]">-- Tất cả thành viên Tổ 4 --</option>
+                      <option value="Tùy chọn" className="bg-[#111]">-- Tùy chọn nhiều học sinh --</option>
+                      {activeStudents.map(s => (
+                        <option key={s.id} value={s.id} className="bg-[#111]">{s.name} ({s.id})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Checklist Section */}
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 block">Danh sách học sinh</label>
+                    </div>
+
+                    <div className="relative mb-2">
+                      <input
+                        type="text"
+                        placeholder="Tìm học sinh..."
+                        value={studentSearchQuery}
+                        onChange={(e) => setStudentSearchQuery(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-8 pr-3 py-1.5 text-[11px] focus:outline-none focus:border-amber-500"
+                      />
+                      <Search size={12} className="absolute left-2.5 top-2.5 text-white/40" />
+                    </div>
+
+                    <div className="border border-white/10 rounded-xl bg-white/[0.02] p-2 h-[155px] overflow-y-auto space-y-1">
+                      {filteredStudentsInList.map(s => {
+                        const isChecked = selectedStudentIds.includes(s.id);
+                        return (
+                          <label key={s.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-white/5 cursor-pointer transition text-[11px] text-white/80">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={isReadOnly}
+                              onChange={() => handleToggleStudent(s.id)}
+                              className="rounded border-white/20 text-amber-500 focus:ring-amber-500 bg-white/5 w-3.5 h-3.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">{s.name}</p>
+                              <p className="text-[9px] text-white/40 font-mono flex items-center gap-2">
+                                <span>{s.id}</span>
+                                {s.groupName && <span className="px-1 py-0.2 bg-white/10 rounded text-[8px] text-white/50">{s.groupName}</span>}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                      {filteredStudentsInList.length === 0 && (
+                        <div className="text-center py-4 text-[10px] text-white/40">Không tìm thấy học sinh</div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center text-[9px] text-white/40 font-bold uppercase tracking-wider px-1 mt-1.5">
+                      <span>Đã chọn: {selectedStudentIds.length}</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            setSelectedStudentIds(activeStudents.map(s => s.id));
+                            setTaskStudentId('Tất cả');
+                          }}
+                          className="text-amber-500 hover:underline hover:text-amber-400 disabled:opacity-50"
+                        >
+                          Chọn tất cả
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            setSelectedStudentIds([]);
+                            setTaskStudentId('Tùy chọn');
+                          }}
+                          className="text-rose-400 hover:underline hover:text-rose-300 disabled:opacity-50"
+                        >
+                          Bỏ chọn
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Tiêu đề nhiệm vụ <span className="text-rose-500">*</span></label>
-                <input
-                  id="task-title-input"
-                  type="text"
-                  required
-                  disabled={isReadOnly}
-                  placeholder="VD: Làm đề cương Lý học kỳ II..."
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Hạn hoàn thành</label>
-                <input
-                  id="task-deadline-input"
-                  type="date"
-                  required
-                  disabled={isReadOnly}
-                  value={taskDeadline}
-                  onChange={(e) => setTaskDeadline(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 font-mono disabled:opacity-50"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Mô tả chi tiết yêu cầu</label>
-                <textarea
-                  id="task-desc-textarea"
-                  placeholder="Nội dung cần chuẩn bị, tài liệu hướng dẫn..."
-                  rows={3}
-                  value={taskDesc}
-                  disabled={isReadOnly}
-                  onChange={(e) => setTaskDesc(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 resize-none placeholder-white/20 disabled:opacity-50"
-                />
-              </div>
-
-              <div className="flex gap-2">
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-3 border-t border-white/5">
                 {editingTaskId && (
                   <button
                     id="task-cancel-edit-btn"
                     type="button"
                     onClick={handleCancelEdit}
-                    className="flex-1 py-3 px-4 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition text-xs border border-white/10"
+                    className="flex-1 py-2.5 px-4 bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl transition text-xs border border-white/10"
                   >
                     Hủy sửa
                   </button>
@@ -471,7 +663,7 @@ export default function TaskManager({
                   id="task-submit-btn"
                   type="submit"
                   disabled={isReadOnly}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl transition text-xs shadow-md font-bold ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl transition text-xs shadow-md font-bold ${
                     isReadOnly
                       ? 'bg-white/5 border border-white/5 text-white/20 cursor-not-allowed'
                       : editingTaskId
@@ -492,7 +684,7 @@ export default function TaskManager({
           </div>
 
           {/* Task Board / List */}
-          <div className="xl:col-span-8 bg-[#111] rounded-3xl border border-white/5 shadow-lg p-5 h-[620px] flex flex-col">
+          <div className="xl:col-span-7 bg-[#111] rounded-3xl border border-white/5 shadow-lg p-5 h-[620px] flex flex-col">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Bảng tiến độ nhiệm vụ</h3>
               

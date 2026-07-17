@@ -79,7 +79,7 @@ export function rowsToViolationTypes(rows: string[][]): ViolationType[] {
 
 // Convert student objects to rows and vice versa
 export function studentsToRows(students: Student[]): string[][] {
-  const headers = ['Mã Học Sinh', 'Họ và Tên', 'Giới Tính', 'Ngày Sinh', 'SĐT Phụ Huynh', 'Địa Chỉ', 'Trạng Thái', 'Họ Tên Cha', 'Nghề Nghiệp Cha', 'Họ Tên Mẹ', 'Nghề Nghiệp Mẹ', 'Mã Lớp', 'Lớp Fallback', 'Năm Học Fallback', 'Link Ảnh Chân Dung', 'Tổ', 'Hàng Ghế', 'Cột Ghế'];
+  const headers = ['Mã Học Sinh', 'Họ và Tên', 'Giới Tính', 'Ngày Sinh', 'SĐT Phụ Huynh', 'Địa Chỉ', 'Trạng Thái', 'Họ Tên Cha', 'Nghề Nghiệp Cha', 'Họ Tên Mẹ', 'Nghề Nghiệp Mẹ', 'Mã Lớp', 'Lớp Fallback', 'Năm Học Fallback', 'Link Ảnh Chân Dung', 'Tổ', 'Hàng Ghế', 'Cột Ghế', 'Chức Vụ'];
   const rows = students.map(s => [
     s.id,
     s.name,
@@ -98,7 +98,8 @@ export function studentsToRows(students: Student[]): string[][] {
     s.avatarUrl || '',
     s.groupName || '',
     s.seatRow !== undefined ? s.seatRow.toString() : '',
-    s.seatCol !== undefined ? s.seatCol.toString() : ''
+    s.seatCol !== undefined ? s.seatCol.toString() : '',
+    s.role || ''
   ]);
   return [headers, ...rows];
 }
@@ -123,7 +124,8 @@ export function rowsToStudents(rows: string[][]): Student[] {
     avatarUrl: row[14] || '',
     groupName: row[15] || '',
     seatRow: row[16] ? parseInt(row[16], 10) : undefined,
-    seatCol: row[17] ? parseInt(row[17], 10) : undefined
+    seatCol: row[17] ? parseInt(row[17], 10) : undefined,
+    role: row[18] || ''
   })).filter(s => s.id);
 }
 
