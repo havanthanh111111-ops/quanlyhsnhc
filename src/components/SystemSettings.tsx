@@ -5,10 +5,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { SheetSyncConfig, Student, ViolationRecord, WeeklyPlan, StudentTask, ViolationType, Teacher, SchoolYear, ClassItem, SystemUser } from '../types';
-import SpreadsheetSync from './SpreadsheetSync';
 import { Settings, Users, ShieldAlert, Database, Plus, Trash2, CheckCircle2, Save, User, Calendar, BookOpen, GraduationCap, Edit2, Check, X, Sparkles, Key } from 'lucide-react';
 import { getWeekConfig, saveWeekConfig } from '../utils/weekUtils';
-import { db, onSnapshot, doc, setDoc } from '../lib/firebase';
+import { db, onSnapshot, doc, setDoc, collection, getDocs } from '../lib/firebase';
 
 interface SystemSettingsProps {
   teachers: Teacher[];
@@ -24,12 +23,6 @@ interface SystemSettingsProps {
   violationTypes: ViolationType[];
   onUpdateViolationTypes: (types: ViolationType[]) => void;
   
-  // Sheet sync props
-  config: SheetSyncConfig;
-  onUpdateConfig: (newConfig: SheetSyncConfig) => void;
-  onPushToSheets: () => Promise<void>;
-  onFetchFromSheets: () => Promise<void>;
-  onCreateNewSheet: () => Promise<string>;
   students: Student[];
   onUpdateStudents: (students: Student[]) => void;
   violations: ViolationRecord[];
@@ -61,11 +54,6 @@ export default function SystemSettings({
   onUpdateActiveClassId,
   violationTypes,
   onUpdateViolationTypes,
-  config,
-  onUpdateConfig,
-  onPushToSheets,
-  onFetchFromSheets,
-  onCreateNewSheet,
   students,
   onUpdateStudents,
   violations,
@@ -248,11 +236,215 @@ export default function SystemSettings({
   const [confirmDeleteRecords, setConfirmDeleteRecords] = useState(false);
   const [confirmResetAll, setConfirmResetAll] = useState(false);
 
+  // Backup / Migrate States
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   const triggerMessage = (text: string, isError = false) => {
     setMessage({ text, isError });
-    setTimeout(() => setMessage(null), 4000);
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const handleExportDatabase = async () => {
+    try {
+      setIsExporting(true);
+      triggerMessage('Đang trích xuất dữ liệu từ Firestore...');
+      
+      const collectionsToExport = [
+        'teachers',
+        'schoolYears',
+        'classes',
+        'students',
+        'violations',
+        'violationTypes',
+        'plans',
+        'tasks',
+        'academicUpdates',
+        'users',
+        'announcements'
+      ];
+      
+      const exportData: Record<string, any> = {};
+      
+      for (const colName of collectionsToExport) {
+        const querySnapshot = await getDocs(collection(db, colName));
+        const docsList: any[] = [];
+        querySnapshot.forEach((docSnap) => {
+          docsList.push({ ...docSnap.data() });
+        });
+        exportData[colName] = docsList;
+      }
+      
+      // Also get settings/global
+      try {
+        const settingsSnap = await getDocs(collection(db, 'settings'));
+        const settingsList: any[] = [];
+        settingsSnap.forEach((docSnap) => {
+          settingsList.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        exportData['settings'] = settingsList;
+      } catch (err) {
+        console.warn('Không thể xuất cấu hình global:', err);
+      }
+
+      // Create downloadable JSON blob
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Du_Lieu_Quan_Ly_Hoc_Sinh_Firestore_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      triggerMessage('Đã xuất dữ liệu sao lưu thành công!');
+    } catch (error: any) {
+      console.error('Lỗi khi xuất dữ liệu:', error);
+      triggerMessage(`Lỗi xuất dữ liệu: ${error.message || error}`, true);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportDatabase = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setIsImporting(true);
+      setImportError(null);
+      triggerMessage('Đang đọc tệp sao lưu...');
+      
+      const fileText = await file.text();
+      const parsedData = JSON.parse(fileText);
+      
+      // Basic schema check
+      if (!parsedData || typeof parsedData !== 'object') {
+        throw new Error('Tệp JSON không hợp lệ.');
+      }
+      
+      triggerMessage('Đang nhập dữ liệu vào Firestore (vui lòng chờ)...');
+      
+      // Clean and import teachers
+      if (Array.isArray(parsedData.teachers)) {
+        for (const t of parsedData.teachers) {
+          if (t.id) await setDoc(doc(db, 'teachers', t.id), t);
+        }
+      }
+      
+      // Import schoolYears
+      if (Array.isArray(parsedData.schoolYears)) {
+        for (const sy of parsedData.schoolYears) {
+          if (sy.id) await setDoc(doc(db, 'schoolYears', sy.id), sy);
+        }
+      }
+      
+      // Import classes
+      if (Array.isArray(parsedData.classes)) {
+        for (const c of parsedData.classes) {
+          if (c.id) await setDoc(doc(db, 'classes', c.id), c);
+        }
+      }
+      
+      // Import students
+      if (Array.isArray(parsedData.students)) {
+        for (const s of parsedData.students) {
+          if (s.id) await setDoc(doc(db, 'students', s.id), s);
+        }
+      }
+      
+      // Import violations
+      if (Array.isArray(parsedData.violations)) {
+        for (const v of parsedData.violations) {
+          if (v.id) await setDoc(doc(db, 'violations', v.id), v);
+        }
+      }
+      
+      // Import violationTypes
+      if (Array.isArray(parsedData.violationTypes)) {
+        for (const vt of parsedData.violationTypes) {
+          if (vt.id) await setDoc(doc(db, 'violationTypes', vt.id), vt);
+        }
+      }
+      
+      // Import plans
+      if (Array.isArray(parsedData.plans)) {
+        for (const p of parsedData.plans) {
+          if (p.id) await setDoc(doc(db, 'plans', p.id), p);
+        }
+      }
+      
+      // Import tasks
+      if (Array.isArray(parsedData.tasks)) {
+        for (const t of parsedData.tasks) {
+          if (t.id) await setDoc(doc(db, 'tasks', t.id), t);
+        }
+      }
+
+      // Import academicUpdates
+      if (Array.isArray(parsedData.academicUpdates)) {
+        for (const au of parsedData.academicUpdates) {
+          if (au.id) await setDoc(doc(db, 'academicUpdates', au.id), au);
+        }
+      }
+      
+      // Import users
+      if (Array.isArray(parsedData.users)) {
+        for (const u of parsedData.users) {
+          if (u.id) await setDoc(doc(db, 'users', u.id), u);
+        }
+      }
+      
+      // Import announcements
+      if (Array.isArray(parsedData.announcements)) {
+        for (const ann of parsedData.announcements) {
+          if (ann.id) await setDoc(doc(db, 'announcements', ann.id), ann);
+        }
+      }
+      
+      // Import settings
+      if (Array.isArray(parsedData.settings)) {
+        for (const setItem of parsedData.settings) {
+          if (setItem.id) {
+            const { id, ...rest } = setItem;
+            await setDoc(doc(db, 'settings', id), rest);
+          }
+        }
+      }
+      
+      triggerMessage('Nhập dữ liệu thành công! Ứng dụng đang tự động đồng bộ lại...', false);
+      
+      // Clear local storage items so they reload from Firestore freshly
+      const keysToClear = [
+        'app_students', 'app_violations', 'app_plans', 'app_tasks', 
+        'app_teachers', 'app_school_years', 'app_classes', 
+        'app_violation_types', 'app_academic_updates', 'app_users',
+        'app_announcements'
+      ];
+      keysToClear.forEach(k => localStorage.removeItem(k));
+      
+      // Reload page to force immediate re-fetch of fresh Firestore data
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error: any) {
+      console.error('Lỗi khi nhập dữ liệu:', error);
+      setImportError(error.message || 'Lỗi không xác định khi tải tệp dữ liệu.');
+      triggerMessage(`Lỗi nhập dữ liệu: ${error.message || error}`, true);
+    } finally {
+      setIsImporting(false);
+      // Reset input value
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
   };
 
   // Local states for School Weeks dynamic distribution
@@ -1450,6 +1642,80 @@ export default function SystemSettings({
               </div>
             </div>
 
+          </div>
+
+          {/* Section 3: Backup & Migration to Vercel/Production */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm text-left mt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">💾</span>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Sao lưu & Di chuyển dữ liệu (Backup / Migration)</h4>
+                  <p className="text-[10px] text-slate-500">Xuất toàn bộ cơ sở dữ liệu Firestore ra tệp JSON để lưu trữ hoặc nhập sang ứng dụng đã deploy trên Vercel khác</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              {/* Export Panel */}
+              <div className="bg-white border border-slate-200 p-5 rounded-xl flex flex-col justify-between space-y-3 shadow-inner">
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                    📤 Xuất dữ liệu (Export)
+                  </h5>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Tải về tệp sao lưu dạng <strong className="font-mono text-slate-700">.json</strong> chứa toàn bộ thông tin niên khóa, giáo viên, học sinh, hồ sơ nề nếp, kế hoạch tuần và tin tức hiện hành từ Firestore.
+                  </p>
+                </div>
+                <button
+                  onClick={handleExportDatabase}
+                  disabled={isExporting}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 cursor-pointer"
+                >
+                  {isExporting ? '⏳ Đang xử lý...' : '⬇️ Tải về tệp dữ liệu .json'}
+                </button>
+              </div>
+
+              {/* Import Panel */}
+              <div className="bg-white border border-slate-200 p-5 rounded-xl flex flex-col justify-between space-y-3 shadow-inner">
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                    📥 Nhập dữ liệu (Import / Restore)
+                  </h5>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Chọn tệp sao lưu <strong className="font-mono text-slate-700">.json</strong> từ máy của bạn để ghi đè hoặc khôi phục lại cơ sở dữ liệu Firestore của ứng dụng này. 
+                  </p>
+                  <p className="text-[10px] text-rose-500 font-semibold mt-1">
+                    ⚠️ Lưu ý: Thao tác này sẽ ghi đè và làm mới lại toàn bộ dữ liệu hiện có trong Firestore!
+                  </p>
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    id="import-backup-file"
+                    onChange={handleImportDatabase}
+                    disabled={isImporting}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="import-backup-file"
+                    className={`w-full py-2.5 border-2 border-dashed border-slate-300 hover:border-slate-400 bg-slate-50 hover:bg-slate-100/80 text-slate-700 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center ${
+                      isImporting ? 'opacity-50 pointer-events-none' : ''
+                    }`}
+                  >
+                    {isImporting ? '⏳ Đang ghi dữ liệu...' : '📁 Tải tệp lên & Khôi phục'}
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {importError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+                Lỗi nhập dữ liệu: {importError}
+              </div>
+            )}
           </div>
         </div>
       )}
