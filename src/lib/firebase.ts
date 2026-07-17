@@ -35,8 +35,19 @@ const activeConfig = isEnvConfigured ? envConfig : firebaseConfig;
 // Initialize Firebase
 const app = initializeApp(activeConfig);
 
-// Initialize Firestore with the specific databaseId from config
-export const db = getFirestore(app, activeConfig.firestoreDatabaseId || undefined);
+// Determine the firestore database ID
+let databaseId = activeConfig.firestoreDatabaseId;
+
+// If we are not in the sandbox project ("fleet-realm-5k91c") and the database ID starts with "ai-studio-",
+// it means this is an exported/deployed version running in the user's own Firebase project.
+// The user's project won't have this sandbox database instance, so we fall back to the "(default)" database.
+if (activeConfig.projectId !== 'fleet-realm-5k91c' && databaseId && databaseId.startsWith('ai-studio-')) {
+  console.log(`Fallback detected: running on custom project '${activeConfig.projectId}' but config specifies sandbox database '${databaseId}'. Falling back to default database.`);
+  databaseId = undefined;
+}
+
+// Initialize Firestore with the specific databaseId from config or fallback to default
+export const db = getFirestore(app, databaseId || undefined);
 
 export { 
   collection, 
