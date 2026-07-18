@@ -856,30 +856,43 @@ export default function PublicPortal({
 
             {/* Vertical scrolling news ticker */}
             <div className="h-[250px] overflow-hidden relative group rounded-2xl bg-slate-50/50 border border-slate-100/80 p-2">
-              {announcements.filter(ann => ann.isNew).length === 0 ? (
-                <div className="h-full flex items-center justify-center text-center text-[10px] text-slate-400 font-bold italic p-4">
-                  Không có thông báo mới nào có nhãn NEW hôm nay.
-                </div>
-              ) : (
-                <div className="absolute left-2 right-2 flex flex-col gap-2.5 animate-marquee-vertical">
-                  {/* Repeat the list twice to create endless loop */}
-                  {[...announcements.filter(ann => ann.isNew), ...announcements.filter(ann => ann.isNew)].map((ann, idx) => (
-                    <div 
-                      key={`${ann.id}-${idx}`} 
-                      onClick={() => setSelectedAnn(ann)}
-                      className="p-3 bg-white hover:bg-blue-50/10 border border-slate-200/60 hover:border-blue-200 rounded-xl space-y-1 shadow-2xs transition duration-150 cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between gap-1.5 text-[9px] font-bold text-slate-400">
-                        <span className="font-mono">{ann.date}</span>
-                        <span className="text-blue-600 uppercase tracking-wider">{ann.category}</span>
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-700 leading-snug hover:text-blue-600 line-clamp-2">
-                        {ann.title}
-                      </h4>
+              {(() => {
+                const newAnnouncements = announcements.filter(ann => ann.isNew);
+                const shouldScroll = newAnnouncements.length > 2;
+                
+                if (newAnnouncements.length === 0) {
+                  return (
+                    <div className="h-full flex items-center justify-center text-center text-[10px] text-slate-400 font-bold italic p-4">
+                      Không có thông báo mới nào có nhãn NEW hôm nay.
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                }
+                
+                return (
+                  <div 
+                    className={`absolute left-2 right-2 flex flex-col gap-2.5 ${
+                      shouldScroll ? 'animate-marquee-vertical' : ''
+                    }`}
+                  >
+                    {/* Repeat the list twice ONLY if there are enough items to scroll smoothly in a loop */}
+                    {(shouldScroll ? [...newAnnouncements, ...newAnnouncements] : newAnnouncements).map((ann, idx) => (
+                      <div 
+                        key={`${ann.id}-${idx}`} 
+                        onClick={() => setSelectedAnn(ann)}
+                        className="p-3 bg-white hover:bg-blue-50/10 border border-slate-200/60 hover:border-blue-200 rounded-xl space-y-1 shadow-2xs transition duration-150 cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between gap-1.5 text-[9px] font-bold text-slate-400">
+                          <span className="font-mono">{ann.date}</span>
+                          <span className="text-blue-600 uppercase tracking-wider">{ann.category}</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-700 leading-snug hover:text-blue-600 line-clamp-2">
+                          {ann.title}
+                        </h4>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               {/* Top and Bottom Fades to conceal entry/exit */}
               <div className="absolute top-0 inset-x-0 h-4 bg-gradient-to-b from-slate-50/80 via-slate-50/20 to-transparent pointer-events-none z-10"></div>
               <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-slate-50/80 via-slate-50/20 to-transparent pointer-events-none z-10"></div>
