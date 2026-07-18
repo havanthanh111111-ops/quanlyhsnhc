@@ -807,13 +807,15 @@ export default function SystemSettings({
         </div>
       </div>
 
-      {/* Action Notification Alert Toast */}
+      {/* Action Notification Alert Toast - Floating fixed container to ensure visibility */}
       {message && (
-        <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 animate-fadeIn ${
-          message.isError ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+        <div className={`fixed bottom-6 right-6 z-[150] p-4 rounded-2xl border text-xs flex items-center gap-2.5 shadow-2xl animate-fadeIn ${
+          message.isError 
+            ? 'bg-rose-900 border-rose-500 text-rose-100 backdrop-blur-md' 
+            : 'bg-emerald-900 border-emerald-500 text-emerald-100 backdrop-blur-md'
         }`}>
-          <CheckCircle2 size={16} />
-          <span>{message.text}</span>
+          <CheckCircle2 size={16} className={message.isError ? 'text-rose-400' : 'text-emerald-400'} />
+          <span className="font-semibold">{message.text}</span>
         </div>
       )}
 
