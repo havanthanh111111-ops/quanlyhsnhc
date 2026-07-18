@@ -482,6 +482,8 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
       setAnnouncements(DEFAULT_ANNOUNCEMENTS);
     }
 
+    let hasLoadedOnce = false;
+
     const unsub = onSnapshot(collection(db, 'announcements'), (snap) => {
       const list: Announcement[] = [];
       snap.forEach(docDoc => {
@@ -491,11 +493,19 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
         list.sort((a, b) => b.id.localeCompare(a.id));
         setAnnouncements(list);
         localStorage.setItem('app_announcements', JSON.stringify(list));
+        hasLoadedOnce = true;
       } else {
-        // Seed DEFAULT_ANNOUNCEMENTS if empty
-        DEFAULT_ANNOUNCEMENTS.forEach(ann => {
-          saveAnnouncement(ann);
-        });
+        if (!hasLoadedOnce) {
+          // Seed DEFAULT_ANNOUNCEMENTS if empty on FIRST load only
+          DEFAULT_ANNOUNCEMENTS.forEach(ann => {
+            saveAnnouncement(ann);
+          });
+          hasLoadedOnce = true;
+        } else {
+          // If empty after first load, it means the user deleted everything intentionally
+          setAnnouncements([]);
+          localStorage.setItem('app_announcements', JSON.stringify([]));
+        }
       }
     });
 
