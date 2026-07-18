@@ -21,6 +21,7 @@ interface TaskManagerProps {
   onUpdateTask: (task: StudentTask) => void;
   onDeleteTask: (id: string) => void;
   activeClassName?: string;
+  teacherName?: string;
   isReadOnly?: boolean;
 }
 
@@ -33,6 +34,7 @@ export default function TaskManager({
   onUpdateTask,
   onDeleteTask,
   activeClassName,
+  teacherName,
   isReadOnly = false
 }: TaskManagerProps) {
   const [weekConfig, setWeekConfig] = useState(() => getWeekConfig());
@@ -923,7 +925,7 @@ export default function TaskManager({
                       <h2 className="text-xs uppercase font-bold text-slate-700 mt-0.5">Trường THPT Nguyễn Hữu Cầu</h2>
                       <h3 className="text-base sm:text-lg font-black text-slate-900 mt-2 uppercase">{reportTitle}</h3>
                       <p className="text-xs text-slate-500 mt-1 italic">
-                        Lớp: {activeClassName || '11A1'} - GVCN: {localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}
+                        Lớp: {activeClassName || '11A1'} - GVCN: {teacherName || localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}
                       </p>
                     </div>
 
@@ -1010,7 +1012,7 @@ export default function TaskManager({
                           <p className="italic">TP. Hồ Chí Minh, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}</p>
                           <p className="font-bold text-slate-700 mt-1">GIÁO VIÊN CHỦ NHIỆM</p>
                           <div className="h-10"></div>
-                          <p className="font-bold text-slate-800">{localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
+                          <p className="font-bold text-slate-800">{teacherName || localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
                         </div>
                       </div>
                     </div>

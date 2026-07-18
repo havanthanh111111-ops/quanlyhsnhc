@@ -121,12 +121,24 @@ export async function saveTeacher(item: Teacher) {
   await setDoc(doc(db, 'teachers', item.id), item);
 }
 
+export async function deleteTeacher(id: string) {
+  await deleteDoc(doc(db, 'teachers', id));
+}
+
 export async function saveSchoolYear(item: SchoolYear) {
   await setDoc(doc(db, 'schoolYears', item.id), item);
 }
 
+export async function deleteSchoolYear(id: string) {
+  await deleteDoc(doc(db, 'schoolYears', id));
+}
+
 export async function saveClass(item: ClassItem) {
   await setDoc(doc(db, 'classes', item.id), item);
+}
+
+export async function deleteClass(id: string) {
+  await deleteDoc(doc(db, 'classes', id));
 }
 
 export async function saveStudent(item: Student) {
@@ -147,6 +159,10 @@ export async function deleteViolation(id: string) {
 
 export async function saveViolationType(item: ViolationType) {
   await setDoc(doc(db, 'violationTypes', item.id), item);
+}
+
+export async function deleteViolationType(id: string) {
+  await deleteDoc(doc(db, 'violationTypes', id));
 }
 
 export async function savePlan(item: WeeklyPlan) {

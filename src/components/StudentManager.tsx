@@ -844,11 +844,17 @@ export default function StudentManager({
       title: 'Xác nhận xóa học sinh',
       message: `Bạn có chắc chắn muốn xoá học sinh "${name}" (${id}) không? Thao tác này cũng sẽ ảnh hưởng đến các bản ghi vi phạm và nhiệm vụ liên quan.`,
       onConfirm: () => {
-        onDeleteStudent(id);
-        if (selectedStudentId === id) {
-          setSelectedStudentId(students.find(s => s.id !== id)?.id || null);
+        try {
+          onDeleteStudent(id);
+          if (selectedStudentId === id) {
+            setSelectedStudentId(students.find(s => s.id !== id)?.id || null);
+          }
+        } catch (err: any) {
+          console.error('Lỗi khi xóa học sinh:', err);
+          alert(`Không thể xóa học sinh: ${err.message || err}`);
+        } finally {
+          setConfirmModal(null);
         }
-        setConfirmModal(null);
       }
     });
   };

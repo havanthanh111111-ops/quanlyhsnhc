@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   doc, 
   setDoc, 
@@ -47,7 +47,10 @@ if (activeConfig.projectId !== 'fleet-realm-5k91c' && databaseId && databaseId.s
 }
 
 // Initialize Firestore with the specific databaseId from config or fallback to default
-export const db = getFirestore(app, databaseId || undefined);
+// We use experimentalForceLongPolling to prevent iframe sandboxes and school firewalls from blocking gRPC/WebSockets
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, databaseId || undefined);
 
 export { 
   collection, 

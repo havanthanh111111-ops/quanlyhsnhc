@@ -15,6 +15,7 @@ interface WeeklyPlannerProps {
   onAddPlan: (plan: WeeklyPlan) => void;
   onUpdatePlan: (plan: WeeklyPlan) => void;
   activeClassName?: string;
+  teacherName?: string;
   isReadOnly?: boolean;
 }
 
@@ -23,6 +24,7 @@ export default function WeeklyPlanner({
   onAddPlan,
   onUpdatePlan,
   activeClassName,
+  teacherName,
   isReadOnly = false
 }: WeeklyPlannerProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(plans[0]?.id || null);
@@ -477,7 +479,7 @@ export default function WeeklyPlanner({
                   {/* Title */}
                   <div>
                     <h3 className="text-lg font-bold text-slate-950 mb-2">{selectedPlan.title}</h3>
-                    <p className="text-[11px] text-slate-400 italic">Lập ngày: {formatPlanDate(selectedPlan.createdAt)} - GVCN: {localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
+                    <p className="text-[11px] text-slate-400 italic">Lập ngày: {formatPlanDate(selectedPlan.createdAt)} - GVCN: {teacherName || localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
                   </div>
 
                   {/* Two columns: Objectives and Notes */}
@@ -523,7 +525,7 @@ export default function WeeklyPlanner({
                       <p className="italic">{formatFooterDate(selectedPlan.createdAt)}</p>
                       <p className="font-bold text-slate-700 mt-1 uppercase">Giáo viên chủ nhiệm</p>
                       <div className="h-12"></div>
-                      <p className="font-semibold text-slate-850">{localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
+                      <p className="font-semibold text-slate-850">{teacherName || localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}</p>
                     </div>
                   </div>
                 </div>
