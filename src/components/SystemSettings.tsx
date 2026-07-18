@@ -539,10 +539,16 @@ export default function SystemSettings({
 
   const handleConfirmDeleteTeacher = () => {
     if (!confirmDeleteTeacherId) return;
-    const updated = teachers.filter(t => t.id !== confirmDeleteTeacherId);
-    onUpdateTeachers(updated);
-    triggerMessage(`Đã xóa giáo viên khỏi danh sách`);
-    setConfirmDeleteTeacherId(null);
+    try {
+      const updated = teachers.filter(t => t.id !== confirmDeleteTeacherId);
+      onUpdateTeachers(updated);
+      triggerMessage(`Đã xóa giáo viên khỏi danh sách thành công!`);
+    } catch (err: any) {
+      console.error('Lỗi khi xóa giáo viên:', err);
+      triggerMessage(`Không thể xóa giáo viên: ${err.message || err}`, true);
+    } finally {
+      setConfirmDeleteTeacherId(null);
+    }
   };
 
   const handleSaveTeacherEdit = (id: string) => {
@@ -592,13 +598,19 @@ export default function SystemSettings({
 
   const handleConfirmDeleteSchoolYear = () => {
     if (!confirmDeleteSchoolYearId) return;
-    const updated = schoolYears.filter(sy => sy.id !== confirmDeleteSchoolYearId);
-    onUpdateSchoolYears(updated);
-    if (activeSchoolYearId === confirmDeleteSchoolYearId) {
-      onUpdateActiveSchoolYearId(updated[0].id);
+    try {
+      const updated = schoolYears.filter(sy => sy.id !== confirmDeleteSchoolYearId);
+      onUpdateSchoolYears(updated);
+      if (activeSchoolYearId === confirmDeleteSchoolYearId && updated.length > 0) {
+        onUpdateActiveSchoolYearId(updated[0].id);
+      }
+      triggerMessage(`Đã xóa niên khóa thành công!`);
+    } catch (err: any) {
+      console.error('Lỗi khi xóa niên khóa:', err);
+      triggerMessage(`Không thể xóa niên khóa: ${err.message || err}`, true);
+    } finally {
+      setConfirmDeleteSchoolYearId(null);
     }
-    triggerMessage(`Đã xóa niên khóa`);
-    setConfirmDeleteSchoolYearId(null);
   };
 
   const handleSaveSchoolYearEdit = (id: string) => {
@@ -664,13 +676,19 @@ export default function SystemSettings({
 
   const handleConfirmDeleteClassItem = () => {
     if (!confirmDeleteClassId) return;
-    const updated = classes.filter(c => c.id !== confirmDeleteClassId);
-    onUpdateClasses(updated);
-    if (activeClassId === confirmDeleteClassId) {
-      onUpdateActiveClassId(updated[0].id);
+    try {
+      const updated = classes.filter(c => c.id !== confirmDeleteClassId);
+      onUpdateClasses(updated);
+      if (activeClassId === confirmDeleteClassId && updated.length > 0) {
+        onUpdateActiveClassId(updated[0].id);
+      }
+      triggerMessage(`Đã xóa lớp học thành công!`);
+    } catch (err: any) {
+      console.error('Lỗi khi xóa lớp học:', err);
+      triggerMessage(`Không thể xóa lớp học: ${err.message || err}`, true);
+    } finally {
+      setConfirmDeleteClassId(null);
     }
-    triggerMessage(`Đã xóa lớp học`);
-    setConfirmDeleteClassId(null);
   };
 
   const handleUpdateClassTeacher = (classId: string, teacherId: string) => {
@@ -739,15 +757,21 @@ export default function SystemSettings({
 
   const handleConfirmDeleteViolationType = () => {
     if (!confirmDeleteViolationTypeId) return;
-    onUpdateViolationTypes(violationTypes.filter(vt => vt.id !== confirmDeleteViolationTypeId));
-    if (editingViolationTypeId === confirmDeleteViolationTypeId) {
-      setEditingViolationTypeId(null);
-      setNewViolationId('');
-      setNewViolationLabel('');
-      setNewViolationPoints(1);
+    try {
+      onUpdateViolationTypes(violationTypes.filter(vt => vt.id !== confirmDeleteViolationTypeId));
+      if (editingViolationTypeId === confirmDeleteViolationTypeId) {
+        setEditingViolationTypeId(null);
+        setNewViolationId('');
+        setNewViolationLabel('');
+        setNewViolationPoints(1);
+      }
+      triggerMessage(`Đã xóa lỗi vi phạm mã: ${confirmDeleteViolationTypeId} thành công!`);
+    } catch (err: any) {
+      console.error('Lỗi khi xóa lỗi vi phạm:', err);
+      triggerMessage(`Không thể xóa lỗi vi phạm: ${err.message || err}`, true);
+    } finally {
+      setConfirmDeleteViolationTypeId(null);
     }
-    triggerMessage(`Đã xóa lỗi vi phạm mã: ${confirmDeleteViolationTypeId}`);
-    setConfirmDeleteViolationTypeId(null);
   };
 
   return (
