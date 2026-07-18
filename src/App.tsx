@@ -713,16 +713,66 @@ export default function App() {
 
   const handleUpdateSchoolYears = (updated: SchoolYear[]) => {
     const removed = schoolYears.filter(sy => !updated.some(u => u.id === sy.id));
-    removed.forEach(sy => dbService.deleteSchoolYear(sy.id));
+    if (removed.length > 0) {
+      const removedIds = removed.map(sy => sy.id);
+      
+      // 1. Delete school years from DB
+      removedIds.forEach(id => dbService.deleteSchoolYear(id));
+      
+      // 2. Cascade delete classes belonging to the removed school years
+      const remainingClasses = classes.filter(c => !removedIds.includes(c.schoolYearId));
+      handleUpdateClasses(remainingClasses);
+    }
     setSchoolYears(updated);
-    updated.forEach(item => dbService.saveSchoolYear(item));
+    if (removed.length === 0) {
+      updated.forEach(item => dbService.saveSchoolYear(item));
+    }
   };
 
   const handleUpdateClasses = (updated: ClassItem[]) => {
     const removed = classes.filter(c => !updated.some(u => u.id === c.id));
-    removed.forEach(c => dbService.deleteClass(c.id));
+    
+    if (removed.length > 0) {
+      const removedIds = removed.map(c => c.id);
+      
+      // 1. Delete classes from DB
+      removedIds.forEach(id => dbService.deleteClass(id));
+      
+      // 2. Cascade delete students belonging to these classes
+      const remainingStudents = students.filter(s => !removedIds.includes(s.classId || ''));
+      const removedStudents = students.filter(s => removedIds.includes(s.classId || ''));
+      removedStudents.forEach(s => dbService.deleteStudent(s.id));
+      setStudents(remainingStudents);
+      
+      // 3. Cascade delete violations of these classes
+      const remainingViolations = violations.filter(v => !removedIds.includes(v.classId || ''));
+      const removedViolations = violations.filter(v => removedIds.includes(v.classId || ''));
+      removedViolations.forEach(v => dbService.deleteViolation(v.id));
+      setViolations(remainingViolations);
+      
+      // 4. Cascade delete plans of these classes
+      const remainingPlans = plans.filter(p => !removedIds.includes(p.classId || ''));
+      const removedPlans = plans.filter(p => removedIds.includes(p.classId || ''));
+      removedPlans.forEach(p => dbService.deletePlan(p.id));
+      setPlans(remainingPlans);
+
+      // 5. Cascade delete tasks of these classes
+      const remainingTasks = tasks.filter(t => !removedIds.includes(t.classId || ''));
+      const removedTasks = tasks.filter(t => removedIds.includes(t.classId || ''));
+      removedTasks.forEach(t => dbService.deleteTask(t.id));
+      setTasks(remainingTasks);
+
+      // 6. Cascade delete academic updates of these classes
+      const remainingUpdates = academicUpdates.filter(u => !removedIds.includes(u.classId || ''));
+      const removedUpdates = academicUpdates.filter(u => removedIds.includes(u.classId || ''));
+      removedUpdates.forEach(u => dbService.deleteAcademicUpdate(u.id));
+      setAcademicUpdates(remainingUpdates);
+    }
+
     setClasses(updated);
-    updated.forEach(item => dbService.saveClass(item));
+    if (removed.length === 0) {
+      updated.forEach(item => dbService.saveClass(item));
+    }
   };
 
   const handleUpdateViolationTypes = (updated: ViolationType[]) => {
@@ -1695,6 +1745,7 @@ export default function App() {
                 onAddPlan={handleAddPlan}
                 onUpdatePlan={handleUpdatePlan}
                 activeClassName={className}
+                teacherName={teacherName}
                 isReadOnly={isReadOnly}
               />
             )}
@@ -1709,6 +1760,7 @@ export default function App() {
                 onUpdateTask={handleUpdateTask}
                 onDeleteTask={handleDeleteTask}
                 activeClassName={className}
+                teacherName={teacherName}
                 isReadOnly={isReadOnly}
               />
             )}
