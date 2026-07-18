@@ -8,6 +8,7 @@ import { SheetSyncConfig, Student, ViolationRecord, WeeklyPlan, StudentTask, Vio
 import { Settings, Users, ShieldAlert, Database, Plus, Trash2, CheckCircle2, Save, User, Calendar, BookOpen, GraduationCap, Edit2, Check, X, Sparkles, Key } from 'lucide-react';
 import { getWeekConfig, saveWeekConfig } from '../utils/weekUtils';
 import { db, onSnapshot, doc, setDoc, collection, getDocs } from '../lib/firebase';
+import { CustomConfirmModal } from './CustomConfirmModal';
 
 interface SystemSettingsProps {
   teachers: Teacher[];
@@ -200,14 +201,20 @@ export default function SystemSettings({
     }
   };
 
-  const handleDeleteSupportUser = async (userId: string, username: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa tài khoản hỗ trợ "${username}" không?`)) {
-      try {
-        await onDeleteUser(userId);
-        triggerMessage(`Đã xóa tài khoản hỗ trợ: ${username}`);
-      } catch (err) {
-        triggerMessage(`Lỗi khi xóa tài khoản: ${err}`);
-      }
+  const handleDeleteSupportUser = (userId: string, username: string) => {
+    setConfirmDeleteSupportUser({ id: userId, name: username });
+  };
+
+  const handleConfirmDeleteSupportUser = async () => {
+    if (!confirmDeleteSupportUser) return;
+    const { id, name } = confirmDeleteSupportUser;
+    try {
+      await onDeleteUser(id);
+      triggerMessage(`Đã xóa tài khoản hỗ trợ: ${name}`);
+    } catch (err) {
+      triggerMessage(`Lỗi khi xóa tài khoản: ${err}`);
+    } finally {
+      setConfirmDeleteSupportUser(null);
     }
   };
   
@@ -235,6 +242,13 @@ export default function SystemSettings({
   // States for cleanup verification
   const [confirmDeleteRecords, setConfirmDeleteRecords] = useState(false);
   const [confirmResetAll, setConfirmResetAll] = useState(false);
+
+  // States for custom delete modals
+  const [confirmDeleteTeacherId, setConfirmDeleteTeacherId] = useState<string | null>(null);
+  const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
+  const [confirmDeleteSchoolYearId, setConfirmDeleteSchoolYearId] = useState<string | null>(null);
+  const [confirmDeleteViolationTypeId, setConfirmDeleteViolationTypeId] = useState<string | null>(null);
+  const [confirmDeleteSupportUser, setConfirmDeleteSupportUser] = useState<{ id: string; name: string } | null>(null);
 
   // Backup / Migrate States
   const [isExporting, setIsExporting] = useState(false);
@@ -520,9 +534,15 @@ export default function SystemSettings({
       triggerMessage('Giáo viên này đang chủ nhiệm lớp học khác, không thể xóa!', true);
       return;
     }
-    const updated = teachers.filter(t => t.id !== id);
+    setConfirmDeleteTeacherId(id);
+  };
+
+  const handleConfirmDeleteTeacher = () => {
+    if (!confirmDeleteTeacherId) return;
+    const updated = teachers.filter(t => t.id !== confirmDeleteTeacherId);
     onUpdateTeachers(updated);
     triggerMessage(`Đã xóa giáo viên khỏi danh sách`);
+    setConfirmDeleteTeacherId(null);
   };
 
   const handleSaveTeacherEdit = (id: string) => {
@@ -567,12 +587,18 @@ export default function SystemSettings({
       triggerMessage('Niên khóa này đang có các lớp học liên kết, không thể xóa!', true);
       return;
     }
-    const updated = schoolYears.filter(sy => sy.id !== id);
+    setConfirmDeleteSchoolYearId(id);
+  };
+
+  const handleConfirmDeleteSchoolYear = () => {
+    if (!confirmDeleteSchoolYearId) return;
+    const updated = schoolYears.filter(sy => sy.id !== confirmDeleteSchoolYearId);
     onUpdateSchoolYears(updated);
-    if (activeSchoolYearId === id) {
+    if (activeSchoolYearId === confirmDeleteSchoolYearId) {
       onUpdateActiveSchoolYearId(updated[0].id);
     }
     triggerMessage(`Đã xóa niên khóa`);
+    setConfirmDeleteSchoolYearId(null);
   };
 
   const handleSaveSchoolYearEdit = (id: string) => {
@@ -633,12 +659,24 @@ export default function SystemSettings({
       triggerMessage('Phải giữ lại ít nhất một lớp học', true);
       return;
     }
-    const updated = classes.filter(c => c.id !== id);
+    setConfirmDeleteClassId(id);
+  };
+
+  const handleConfirmDeleteClassItem = () => {
+    if (!confirmDeleteClassId) return;
+    const updated = classes.filter(c => c.id !== confirmDeleteClassId);
     onUpdateClasses(updated);
-    if (activeClassId === id) {
+    if (activeClassId === confirmDeleteClassId) {
       onUpdateActiveClassId(updated[0].id);
     }
     triggerMessage(`Đã xóa lớp học`);
+    setConfirmDeleteClassId(null);
+  };
+
+  const handleUpdateClassTeacher = (classId: string, teacherId: string) => {
+    const updated = classes.map(c => c.id === classId ? { ...c, teacherId } : c);
+    onUpdateClasses(updated);
+    triggerMessage('Đã cập nhật Giáo viên chủ nhiệm cho lớp học thành công!');
   };
 
   // Violation Catalog managers
@@ -696,14 +734,20 @@ export default function SystemSettings({
       triggerMessage('Phải giữ lại ít nhất một loại lỗi vi phạm mặc định', true);
       return;
     }
-    onUpdateViolationTypes(violationTypes.filter(vt => vt.id !== id));
-    if (editingViolationTypeId === id) {
+    setConfirmDeleteViolationTypeId(id);
+  };
+
+  const handleConfirmDeleteViolationType = () => {
+    if (!confirmDeleteViolationTypeId) return;
+    onUpdateViolationTypes(violationTypes.filter(vt => vt.id !== confirmDeleteViolationTypeId));
+    if (editingViolationTypeId === confirmDeleteViolationTypeId) {
       setEditingViolationTypeId(null);
       setNewViolationId('');
       setNewViolationLabel('');
       setNewViolationPoints(1);
     }
-    triggerMessage(`Đã xóa lỗi vi phạm mã: ${id}`);
+    triggerMessage(`Đã xóa lỗi vi phạm mã: ${confirmDeleteViolationTypeId}`);
+    setConfirmDeleteViolationTypeId(null);
   };
 
   return (
@@ -1076,9 +1120,20 @@ export default function SystemSettings({
                             <Trash2 size={13} />
                           </button>
                         </div>
-                        <div className="text-[10px] text-white/40 flex justify-between pr-6 font-mono">
+                        <div className="text-[10px] text-white/40 flex flex-col sm:flex-row sm:items-center justify-between gap-1 pr-6 font-mono">
                           <span>Năm: {sy ? sy.name : 'N/A'}</span>
-                          <span>GVCN: {teacher ? teacher.name : 'N/A'}</span>
+                          <div className="flex items-center gap-1">
+                            <span>GVCN:</span>
+                            <select
+                              value={c.teacherId || ''}
+                              onChange={(e) => handleUpdateClassTeacher(c.id, e.target.value)}
+                              className="bg-[#1a1a1a] border border-white/10 rounded px-1.5 py-0.5 text-[10px] text-white/90 focus:outline-none focus:border-amber-500 cursor-pointer max-w-[110px] truncate"
+                            >
+                              {teachers.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1901,6 +1956,62 @@ export default function SystemSettings({
           )}
         </div>
       )}
+
+      {/* Custom Confirmation Modals */}
+      <CustomConfirmModal
+        isOpen={!!confirmDeleteTeacherId}
+        title="Xác nhận xóa giáo viên"
+        message={`Bạn có chắc chắn muốn xóa giáo viên "${teachers.find(t => t.id === confirmDeleteTeacherId)?.name || ''}" khỏi danh sách không?`}
+        confirmLabel="Xóa giáo viên"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteTeacher}
+        onCancel={() => setConfirmDeleteTeacherId(null)}
+      />
+
+      <CustomConfirmModal
+        isOpen={!!confirmDeleteClassId}
+        title="Xác nhận xóa lớp học"
+        message={`CẢNH BÁO: Bạn có chắc chắn muốn xóa lớp học "${classes.find(c => c.id === confirmDeleteClassId)?.name || ''}" không?\n\nHành động này sẽ XÓA TOÀN BỘ học sinh, các lỗi vi phạm, thời khóa biểu, kế hoạch tuần và tất cả dữ liệu liên kết với lớp học này khỏi hệ thống cơ sở dữ liệu.`}
+        confirmLabel="Xóa lớp học"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteClassItem}
+        onCancel={() => setConfirmDeleteClassId(null)}
+      />
+
+      <CustomConfirmModal
+        isOpen={!!confirmDeleteSchoolYearId}
+        title="Xác nhận xóa niên khóa"
+        message={`Bạn có chắc chắn muốn xóa niên khóa "${schoolYears.find(sy => sy.id === confirmDeleteSchoolYearId)?.name || ''}" không?`}
+        confirmLabel="Xóa niên khóa"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteSchoolYear}
+        onCancel={() => setConfirmDeleteSchoolYearId(null)}
+      />
+
+      <CustomConfirmModal
+        isOpen={!!confirmDeleteViolationTypeId}
+        title="Xác nhận xóa lỗi vi phạm"
+        message={`Bạn có chắc chắn muốn xóa hành vi vi phạm "${violationTypes.find(vt => vt.id === confirmDeleteViolationTypeId)?.label || ''}" khỏi danh mục lỗi phạt không?`}
+        confirmLabel="Xóa hành vi"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteViolationType}
+        onCancel={() => setConfirmDeleteViolationTypeId(null)}
+      />
+
+      <CustomConfirmModal
+        isOpen={!!confirmDeleteSupportUser}
+        title="Xác nhận xóa tài khoản hỗ trợ"
+        message={`Bạn có chắc chắn muốn xóa tài khoản hỗ trợ "${confirmDeleteSupportUser?.name || ''}" không?`}
+        confirmLabel="Xóa tài khoản"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteSupportUser}
+        onCancel={() => setConfirmDeleteSupportUser(null)}
+      />
 
     </div>
   );
