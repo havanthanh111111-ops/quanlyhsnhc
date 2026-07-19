@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Student, ViolationRecord, StudentTask, WeeklyPlan } from '../types';
-import { Plus, CheckCircle, Clock, Play, Trash2, FileText, Download, TrendingUp, Sparkles, AlertCircle, Award, Edit3, Search } from 'lucide-react';
+import { Plus, CheckCircle, Clock, Play, Trash2, FileText, Download, TrendingUp, Sparkles, AlertCircle, Award, Edit3, Search, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { CustomConfirmModal } from './CustomConfirmModal';
@@ -84,22 +84,37 @@ export default function TaskManager({
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
 
   // Active students (or all students if read-only for old classes)
-  const activeStudents = isReadOnly ? students : students.filter(s => s.status === 'Đang học');
+  const activeStudents = useMemo(() => {
+    return isReadOnly ? students : students.filter(s => s.status === 'Đang học');
+  }, [isReadOnly, students]);
 
   // Synchronize dropdown selection with checkbox list
   useEffect(() => {
     if (editingTaskId) {
-      setSelectedStudentIds([taskStudentId]);
+      setSelectedStudentIds(prev => {
+        if (prev.length === 1 && prev[0] === taskStudentId) return prev;
+        return [taskStudentId];
+      });
     } else {
       if (taskStudentId === 'Tất cả') {
-        setSelectedStudentIds(activeStudents.map(s => s.id));
+        const targetIds = activeStudents.map(s => s.id);
+        setSelectedStudentIds(prev => {
+          if (prev.length === targetIds.length && prev.every((id, idx) => id === targetIds[idx])) return prev;
+          return targetIds;
+        });
       } else if (taskStudentId.startsWith('Tổ ')) {
         const groupStudents = activeStudents.filter(s => s.groupName === taskStudentId).map(s => s.id);
-        setSelectedStudentIds(groupStudents);
+        setSelectedStudentIds(prev => {
+          if (prev.length === groupStudents.length && prev.every((id, idx) => id === groupStudents[idx])) return prev;
+          return groupStudents;
+        });
       } else if (taskStudentId === 'Tùy chọn') {
         // Do not reset in case user manually customized
       } else {
-        setSelectedStudentIds([taskStudentId]);
+        setSelectedStudentIds(prev => {
+          if (prev.length === 1 && prev[0] === taskStudentId) return prev;
+          return [taskStudentId];
+        });
       }
     }
   }, [editingTaskId, taskStudentId, activeStudents]);
@@ -156,7 +171,7 @@ export default function TaskManager({
     const defaultWeek = weeksList.find(w => w.weekNumber === 35) ? 35 : (weeksList[weeksList.length - 1]?.weekNumber || 1);
     return `Báo cáo nề nếp và học tập Tuần ${defaultWeek}`;
   });
-  const [reportContent, setReportContent] = useState<string>('');
+  const [reportHtml, setReportHtml] = useState<string>('');
   const [isReportGenerated, setIsReportGenerated] = useState(false);
 
   // Get weeks included in the current report scope
@@ -402,55 +417,43 @@ export default function TaskManager({
     const totalCompletedTasks = currentRangeTasks.filter(t => t.status === 'Đã hoàn thành').length;
     const taskCompletionRate = totalAssignedTasks > 0 ? Math.round((totalCompletedTasks / totalAssignedTasks) * 100) : 100;
 
-    // Compile Markdown/HTML friendly summary text
-    const autoContent = `
-### 1. Đánh giá nề nếp & chuyên cần:
-- Lớp học duy trì nề nếp tương đối ổn định.
-- **Tổng số lượt đi muộn:** ${totalLate} lượt.
-- **Tổng số lượt nghỉ học:** ${totalAbsentPermission} lượt có phép, ${totalAbsentNoPermission} lượt không phép.
-- **Tình hình bài tập về nhà:** Ghi nhận ${totalNoHomework} trường hợp không làm bài tập hoặc thiếu đề cương ôn tập.
-
-### 2. Kết quả học tập & hoàn thành nhiệm vụ:
-- **Tỷ lệ hoàn thành nhiệm vụ:** ${taskCompletionRate}% (${totalCompletedTasks}/${totalAssignedTasks > 0 ? totalAssignedTasks : 0} nhiệm vụ được hoàn thành).
-- Các nhiệm vụ lớn như chuẩn bị đề cương và trực nhật lớp đã được ban cán sự theo dõi chặt chẽ.
-
-### 3. Tuyên dương & Nhắc nhở:
-- **Tuyên dương (Gương mẫu, nề nếp tốt):** ${outstandingStudents.map(s => `${s.name} (${s.id})`).join(', ') || 'Cả lớp ổn định'}.
-- **Yêu cầu chấn chỉnh (Điểm trừ nhiều):** ${warningStudents.map(s => `${s.name} (Bị trừ ${Math.abs(s.points)}đ)`).join(', ') || 'Không có học sinh cá biệt'}.
-`;
-
-    setReportContent(autoContent);
-    setIsReportGenerated(true);
-  };
-
-  const handleExportReportPDF = async () => {
-    if (!reportPrintRef.current) return;
-    try {
-      const element = reportPrintRef.current;
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+    const planTitle = (() => {
+      if (reportRange === 'hk1' || reportRange === 'hk2') {
+        const semesterPlans = plans.filter(p => includedWeeks.some(w => w.weekNumber === p.weekNumber));
+        return semesterPlans.length > 0
+          ? semesterPlans.map(p => `• Tuần ${p.weekNumber}: ${p.title}`).join('<br />')
+          : 'Đang ôn tập và giữ vững thi đua nề nếp lớp học trong suốt học kỳ.';
       }
-      
-      pdf.save(`BaoCaoDinhKy_Tuan${reportWeek}.pdf`);
-    } catch (e) {
-      console.error(e);
-      alert('Không thể xuất tệp PDF. Vui lòng thử lại!');
-    }
+      return plans.find(p => p.weekNumber === reportWeek)?.title || 'Đang ôn tập và giữ vững thi đua nề nếp lớp học.';
+    })();
+
+    const autoHtml = `
+      <div style="background-color: rgba(217, 119, 6, 0.05); border: 1px solid rgba(217, 119, 6, 0.15); border-radius: 12px; padding: 14px; margin-bottom: 24px;">
+        <h4 style="font-size: 13px; font-weight: 700; color: #b45309; text-transform: uppercase; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;">
+          🚀 Kế hoạch ${reportRange === 'hk1' ? 'Học kỳ I' : reportRange === 'hk2' ? 'Học kỳ II' : `tuần ${reportWeek}`} đã triển khai
+        </h4>
+        <p style="font-size: 13px; color: #475569; margin: 0; font-style: italic; line-height: 1.5;">
+          ${planTitle}
+        </p>
+      </div>
+
+      <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 16px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; text-transform: uppercase;">1. Đánh giá nề nếp & chuyên cần:</h4>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• Lớp học duy trì nề nếp tương đối ổn định.</p>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Tổng số lượt đi muộn:</strong> ${totalLate} lượt.</p>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Tổng số lượt nghỉ học:</strong> ${totalAbsentPermission} lượt có phép, <span style="color: #dc2626;"><strong>${totalAbsentNoPermission} lượt không phép</strong></span>.</p>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Tình hình bài tập về nhà:</strong> Ghi nhận ${totalNoHomework} trường hợp không làm bài tập hoặc thiếu đề cương ôn tập.</p>
+
+      <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; text-transform: uppercase;">2. Kết quả học tập & hoàn thành nhiệm vụ:</h4>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Tỷ lệ hoàn thành nhiệm vụ:</strong> <span style="color: #16a34a;"><strong>${taskCompletionRate}%</strong></span> (${totalCompletedTasks}/${totalAssignedTasks > 0 ? totalAssignedTasks : 0} nhiệm vụ được hoàn thành).</p>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• Các nhiệm vụ lớn như chuẩn bị đề cương và trực nhật lớp đã được ban cán sự theo dõi chặt chẽ.</p>
+
+      <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; text-transform: uppercase;">3. Tuyên dương & Nhắc nhở:</h4>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Tuyên dương (Gương mẫu, nề nếp tốt):</strong> <span style="color: #16a34a;"><strong>${outstandingStudents.map(s => `${s.name} (${s.id})`).join(', ') || 'Cả lớp ổn định'}</strong></span>.</p>
+      <p style="font-size: 13px; margin: 6px 0; color: #334155; line-height: 1.6;">• <strong>Yêu cầu chấn chỉnh (Điểm trừ nhiều):</strong> <span style="color: #dc2626;"><strong>${warningStudents.map(s => `${s.name} (Bị trừ ${Math.abs(s.points)}đ)`).join(', ') || 'Không có học sinh cá biệt'}</strong></span>.</p>
+    `;
+
+    setReportHtml(autoHtml);
+    setIsReportGenerated(true);
   };
 
   const filteredTasks = tasks.filter(t => {
@@ -903,12 +906,94 @@ export default function TaskManager({
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/5 shrink-0">
                   <span className="text-xs text-white/30 font-mono uppercase tracking-wider">Bản xem trước báo cáo định kỳ</span>
                   <button
-                    id="btn-report-download-pdf"
-                    onClick={handleExportReportPDF}
+                    id="btn-report-print"
+                    onClick={() => window.print()}
                     className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-black px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
                   >
-                    <Download size={14} /> Tải file PDF
+                    <Printer size={14} /> In báo cáo / Lưu PDF
                   </button>
+                </div>
+
+                {/* Formatting Toolbar */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-4 bg-white/5 p-2 rounded-xl border border-white/10 text-xs text-white shrink-0">
+                  <span className="text-[10px] font-semibold uppercase text-white/40 px-1">Định dạng:</span>
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('bold', false);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition"
+                    title="Chữ đậm"
+                  >
+                    B
+                  </button>
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('italic', false);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white italic rounded-lg transition"
+                    title="Chữ nghiêng"
+                  >
+                    I
+                  </button>
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('underline', false);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white underline rounded-lg transition"
+                    title="Gạch chân"
+                  >
+                    U
+                  </button>
+                  <div className="w-[1px] h-5 bg-white/10 mx-1" />
+                  
+                  <span className="text-[10px] font-semibold uppercase text-white/40 px-1">Màu chữ:</span>
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('foreColor', false, '#1e293b');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 bg-slate-800"
+                    title="Màu đen"
+                  />
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('foreColor', false, '#dc2626');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 bg-rose-600"
+                    title="Màu đỏ"
+                  />
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('foreColor', false, '#16a34a');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 bg-emerald-600"
+                    title="Màu xanh lá"
+                  />
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('foreColor', false, '#2563eb');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 bg-blue-600"
+                    title="Màu xanh dương"
+                  />
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      document.execCommand('foreColor', false, '#d97706');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 bg-amber-600"
+                    title="Màu cam"
+                  />
+
+                  <span className="ml-auto text-[10px] text-white/40 italic hidden sm:inline">
+                    💡 Nhấp trực tiếp vào nội dung báo cáo để sửa
+                  </span>
                 </div>
 
                 {/* Printable Frame */}
@@ -928,7 +1013,7 @@ export default function TaskManager({
                         Lớp: {activeClassName || '11A1'} - GVCN: {teacherName || localStorage.getItem('teacherName') || 'Nguyễn Tuyết Mai'}
                       </p>
                     </div>
-
+ 
                     {/* Report body split from Compiled Markdown */}
                     <div className="space-y-6">
                       {/* Metric widgets inside PDF */}
@@ -965,42 +1050,14 @@ export default function TaskManager({
                         </div>
                       </div>
 
-                      {/* Objectives achieved block */}
-                      <div className="bg-amber-50/20 border border-amber-100/50 rounded-xl p-4">
-                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-amber-600" /> Kế hoạch {reportRange === 'hk1' ? 'Học kỳ I' : reportRange === 'hk2' ? 'Học kỳ II' : `tuần ${reportWeek}`} đã triển khai
-                        </h4>
-                        <p className="text-xs sm:text-sm text-slate-600 whitespace-pre-line leading-relaxed italic">
-                          {(() => {
-                            if (reportRange === 'hk1' || reportRange === 'hk2') {
-                              const semesterPlans = plans.filter(p => includedWeeks.some(w => w.weekNumber === p.weekNumber));
-                              return semesterPlans.length > 0
-                                ? semesterPlans.map(p => `• Tuần ${p.weekNumber}: ${p.title}`).join('\n')
-                                : 'Đang ôn tập và giữ vững thi đua nề nếp lớp học trong suốt học kỳ.';
-                            }
-                            return plans.find(p => p.weekNumber === reportWeek)?.title || 'Đang ôn tập và giữ vững thi đua nề nếp lớp học.';
-                          })()}
-                        </p>
-                      </div>
-
-                      {/* Auto compiled section rendered beautifully */}
-                      <div className="space-y-4">
-                        {reportContent.split('\n').map((line, idx) => {
-                          const trimmed = line.trim();
-                          if (trimmed.startsWith('###')) {
-                            return <h4 key={idx} className="text-xs sm:text-sm font-bold text-slate-900 mt-4 mb-2 border-b border-slate-100 pb-1 uppercase">{trimmed.replace('###', '').trim()}</h4>;
-                          }
-                          if (trimmed.startsWith('-')) {
-                            return (
-                              <div key={idx} className="flex gap-2 text-xs sm:text-sm text-slate-600 ml-4 py-0.5">
-                                <span className="text-slate-400">•</span>
-                                <span>{trimmed.substring(1).trim()}</span>
-                              </div>
-                            );
-                          }
-                          return <p key={idx} className="text-xs sm:text-sm text-slate-600 leading-relaxed">{line}</p>;
-                        })}
-                      </div>
+                      {/* ContentEditable Beautiful HTML Area */}
+                      <div
+                        contentEditable={true}
+                        suppressContentEditableWarning={true}
+                        dangerouslySetInnerHTML={{ __html: reportHtml }}
+                        className="focus:outline-none min-h-[300px] text-xs sm:text-sm text-slate-700 leading-relaxed font-sans"
+                        style={{ outline: 'none' }}
+                      />
 
                       {/* Sign-off signatures */}
                       <div className="flex justify-between items-center pt-8 border-t border-slate-100 text-[10px] text-slate-400 mt-12">

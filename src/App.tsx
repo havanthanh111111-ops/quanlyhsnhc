@@ -672,6 +672,11 @@ export default function App() {
     dbService.savePlan(plan);
   };
 
+  const handleDeletePlan = (id: string) => {
+    setPlans(prev => prev.filter(item => item.id !== id));
+    dbService.deletePlan(id);
+  };
+
   const handleAddTask = (t: StudentTask) => {
     const task = { ...t, classId: activeClassId, className, schoolYear };
     setTasks(prev => [...prev, task]);
@@ -1744,6 +1749,7 @@ export default function App() {
                 plans={filteredPlans}
                 onAddPlan={handleAddPlan}
                 onUpdatePlan={handleUpdatePlan}
+                onDeletePlan={handleDeletePlan}
                 activeClassName={className}
                 teacherName={teacherName}
                 isReadOnly={isReadOnly}

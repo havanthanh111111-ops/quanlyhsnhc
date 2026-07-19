@@ -91,13 +91,16 @@
   #weekly-plan-print-preview,
   #weekly-plan-print-preview *,
   #student-report-print-preview,
-  #student-report-print-preview * {
+  #student-report-print-preview *,
+  #report-print-preview,
+  #report-print-preview * {
     visibility: visible !important;
   }
 
   /* Position the print target perfectly */
   #weekly-plan-print-preview,
-  #student-report-print-preview {
+  #student-report-print-preview,
+  #report-print-preview {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;

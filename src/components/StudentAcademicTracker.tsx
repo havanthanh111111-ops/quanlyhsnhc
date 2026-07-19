@@ -55,9 +55,11 @@ export default function StudentAcademicTracker({
   isReadOnly = false
 }: StudentAcademicTrackerProps) {
   // Filter updates for current student
-  const studentUpdates = academicUpdates
-    .filter(u => u.studentId === studentId)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort ascending by date for timeline/progress
+  const studentUpdates = React.useMemo(() => {
+    return academicUpdates
+      .filter(u => u.studentId === studentId)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort ascending by date for timeline/progress
+  }, [academicUpdates, studentId]);
 
   const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(() => {
     return studentUpdates[studentUpdates.length - 1]?.id || null;

@@ -133,6 +133,7 @@ export default function ClassManager({
   }, [weekConfig]);
 
   const [selectedDutyGroup, setSelectedDutyGroup] = useState<string>('Tổ 1');
+  const [participationGroupFilter, setParticipationGroupFilter] = useState<string>('all');
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState<boolean>(false);
   const [activeDayGroupDropdown, setActiveDayGroupDropdown] = useState<string | null>(null);
   const [activeDutyInput, setActiveDutyInput] = useState<{ day: string; field: 'sweeping' | 'cleaningBoard' | 'trash' } | null>(null);
@@ -350,20 +351,13 @@ export default function ClassManager({
         setParticipationData({});
       }
     } else {
-      // Seed realistic data for the class students
+      // By default, set all students' participation counts to 0 for a new day
       const seeded: Record<string, number> = {};
       const subjectsList = ['Toán', 'Lý', 'Hóa', 'Văn', 'Anh', 'Sử', 'Địa', 'Tin'];
       
       classStudents.forEach(s => {
-        // deterministic but random-looking seed based on student ID string hash
-        let hash = 0;
-        for (let i = 0; i < s.id.length; i++) {
-          hash = s.id.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        
-        subjectsList.forEach((sub, subIdx) => {
-          const valHash = Math.abs((hash + subIdx) % 7);
-          seeded[`${s.id}_${sub}`] = valHash === 0 ? 0 : valHash > 4 ? Math.abs(hash % 3) : Math.abs(hash % 5);
+        subjectsList.forEach((sub) => {
+          seeded[`${s.id}_${sub}`] = 0;
         });
       });
       setParticipationData(seeded);
@@ -1534,89 +1528,115 @@ export default function ClassManager({
                 )}
 
                 {/* Sub-tab 2: Edit Participation */}
-                {remindersSubTab === 'participation' && (
-                  <div className="bg-[#111] p-6 rounded-3xl border border-white/5 shadow-md flex flex-col gap-4 w-full">
-                    <div className="pb-3 border-b border-white/5 flex justify-between items-center">
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-emerald-400" />
-                          <span>Số lần phát biểu xây dựng bài</span>
-                        </h4>
-                        <p className="text-[10px] text-white/40 mt-1">Cột "STT" và "Họ và Tên" được cố định. Trượt ngang để nhập liệu cho các môn học.</p>
+                {remindersSubTab === 'participation' && (() => {
+                  const displayedClassStudents = classStudents.filter(s => {
+                    if (participationGroupFilter === 'all') return true;
+                    return s.groupName === participationGroupFilter;
+                  });
+
+                  return (
+                    <div className="bg-[#111] p-6 rounded-3xl border border-white/5 shadow-md flex flex-col gap-4 w-full">
+                      <div className="pb-3 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-1.5">
+                            <TrendingUp size={14} className="text-emerald-400" />
+                            <span>Số lần phát biểu xây dựng bài</span>
+                          </h4>
+                          <p className="text-[10px] text-white/40 mt-1">Cột "STT" và "Họ và Tên" được cố định. Trượt ngang để nhập liệu cho các môn học.</p>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                          {/* Tổ filter dropdown */}
+                          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Tổ:</span>
+                            <select
+                              value={participationGroupFilter}
+                              onChange={(e) => setParticipationGroupFilter(e.target.value)}
+                              className="bg-transparent text-white font-semibold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer"
+                            >
+                              <option value="all" className="bg-[#111]">Cả lớp</option>
+                              <option value="Tổ 1" className="bg-[#111]">Tổ 1</option>
+                              <option value="Tổ 2" className="bg-[#111]">Tổ 2</option>
+                              <option value="Tổ 3" className="bg-[#111]">Tổ 3</option>
+                              <option value="Tổ 4" className="bg-[#111]">Tổ 4</option>
+                            </select>
+                          </div>
+
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full font-bold whitespace-nowrap">
+                            {displayedClassStudents.length} Học sinh • {formatDateLabel(selectedDate)}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full font-bold">
-                        {classStudents.length} Học sinh • {formatDateLabel(selectedDate)}
-                      </span>
-                    </div>
 
-                    {/* Horizontal scrollable wrapper with sticky columns support */}
-                    <div className="overflow-x-auto rounded-2xl border border-white/10 shadow-inner custom-scrollbar relative">
-                      <table className="w-full text-xs text-left text-white/80 border-collapse min-w-[950px]">
-                        <thead>
-                          <tr className="border-b border-white/10 text-[9px] uppercase tracking-wider text-white/40 bg-[#161616] select-none">
-                            <th className="py-4 px-4 font-black w-12 text-center sticky left-0 bg-[#161616] z-30 border-r border-white/10">STT</th>
-                            <th className="py-4 px-4 font-black w-48 sticky left-12 bg-[#161616] z-30 border-r border-white/10 shadow-[2px_0_4px_rgba(0,0,0,0.5)]">Họ và Tên</th>
-                            {subjectsList.map(sub => (
-                              <th key={sub} className="py-4 px-2 font-black text-center w-24">{sub}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {classStudents.map((student, sIdx) => (
-                            <tr key={student.id} className="group hover:bg-white/[0.02] transition">
-                              <td className="py-3.5 px-4 text-white/30 text-center font-mono sticky left-0 bg-[#111] group-hover:bg-[#1a1a1a] z-20 border-r border-white/10 transition-colors">
-                                {sIdx + 1}
-                              </td>
-                              <td className="py-3.5 px-4 font-bold text-white sticky left-12 bg-[#111] group-hover:bg-[#1a1a1a] z-20 border-r border-white/10 shadow-[2px_0_4px_rgba(0,0,0,0.5)] transition-colors truncate max-w-[192px] w-48">
-                                {student.name}
-                              </td>
-                              {subjectsList.map(sub => {
-                                const key = `${student.id}_${sub}`;
-                                const count = participationData[key] || 0;
-                                return (
-                                  <td key={sub} className="py-2 px-1 text-center">
-                                    <div className="flex items-center justify-center gap-1.5 mx-auto">
-                                      <button
-                                        disabled={isReadOnly}
-                                        onClick={() => handleDecrement(student.id, sub)}
-                                        className="w-5 h-5 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/60 text-xs font-black transition disabled:opacity-50 select-none cursor-pointer border border-white/5"
-                                      >
-                                        -
-                                      </button>
-                                      <span className={`w-6 font-mono text-center text-[11px] font-bold ${
-                                        count > 0 
-                                          ? count >= 3 
-                                            ? 'text-emerald-400 font-extrabold' 
-                                            : 'text-amber-400' 
-                                          : 'text-white/20'
-                                      }`}>
-                                        {count}
-                                      </span>
-                                      <button
-                                        disabled={isReadOnly}
-                                        onClick={() => handleIncrement(student.id, sub)}
-                                        className="w-5 h-5 flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-black transition disabled:opacity-50 select-none cursor-pointer border border-amber-500/10"
-                                      >
-                                        +
-                                      </button>
-                                    </div>
-                                  </td>
-                                );
-                              })}
+                      {/* Horizontal scrollable wrapper with sticky columns support */}
+                      <div className="overflow-x-auto rounded-2xl border border-white/10 shadow-inner custom-scrollbar relative">
+                        <table className="w-full text-xs text-left text-white/80 border-collapse min-w-[950px]">
+                          <thead>
+                            <tr className="border-b border-white/10 text-[9px] uppercase tracking-wider text-white/40 bg-[#161616] select-none">
+                              <th className="py-4 px-4 font-black w-12 text-center sticky left-0 bg-[#161616] z-30 border-r border-white/10">STT</th>
+                              <th className="py-4 px-4 font-black w-48 sticky left-12 bg-[#161616] z-30 border-r border-white/10 shadow-[2px_0_4px_rgba(0,0,0,0.5)]">Họ và Tên</th>
+                              {subjectsList.map(sub => (
+                                <th key={sub} className="py-4 px-2 font-black text-center w-24">{sub}</th>
+                              ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {displayedClassStudents.map((student, sIdx) => (
+                              <tr key={student.id} className="group hover:bg-white/[0.02] transition">
+                                <td className="py-3.5 px-4 text-white/30 text-center font-mono sticky left-0 bg-[#111] group-hover:bg-[#1a1a1a] z-20 border-r border-white/10 transition-colors">
+                                  {sIdx + 1}
+                                </td>
+                                <td className="py-3.5 px-4 font-bold text-white sticky left-12 bg-[#111] group-hover:bg-[#1a1a1a] z-20 border-r border-white/10 shadow-[2px_0_4px_rgba(0,0,0,0.5)] transition-colors truncate max-w-[192px] w-48">
+                                  {student.name}
+                                </td>
+                                {subjectsList.map(sub => {
+                                  const key = `${student.id}_${sub}`;
+                                  const count = participationData[key] || 0;
+                                  return (
+                                    <td key={sub} className="py-2 px-1 text-center">
+                                      <div className="flex items-center justify-center gap-1.5 mx-auto">
+                                        <button
+                                          disabled={isReadOnly}
+                                          onClick={() => handleDecrement(student.id, sub)}
+                                          className="w-5 h-5 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/60 text-xs font-black transition disabled:opacity-50 select-none cursor-pointer border border-white/5"
+                                        >
+                                          -
+                                        </button>
+                                        <span className={`w-6 font-mono text-center text-[11px] font-bold ${
+                                          count > 0 
+                                            ? count >= 3 
+                                              ? 'text-emerald-400 font-extrabold' 
+                                              : 'text-amber-400' 
+                                            : 'text-white/20'
+                                        }`}>
+                                          {count}
+                                        </span>
+                                        <button
+                                          disabled={isReadOnly}
+                                          onClick={() => handleIncrement(student.id, sub)}
+                                          className="w-5 h-5 flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-black transition disabled:opacity-50 select-none cursor-pointer border border-amber-500/10"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
 
-                    <div className="flex items-center gap-2 p-3 bg-white/[0.01] border border-white/5 rounded-2xl">
-                      <Info size={13} className="text-amber-500 shrink-0" />
-                      <p className="text-[10px] text-white/40 leading-normal font-medium">
-                        Sử dụng các nút <span className="font-bold text-amber-400 bg-white/5 px-1 py-0.5 rounded">-</span> và <span className="font-bold text-amber-400 bg-white/5 px-1 py-0.5 rounded">+</span> để thay đổi điểm số phát biểu cho từng học sinh theo ngày học đã chọn.
-                      </p>
+                      <div className="flex items-center gap-2 p-3 bg-white/[0.01] border border-white/5 rounded-2xl">
+                        <Info size={13} className="text-amber-500 shrink-0" />
+                        <p className="text-[10px] text-white/40 leading-normal font-medium">
+                          Sử dụng các nút <span className="font-bold text-amber-400 bg-white/5 px-1 py-0.5 rounded">-</span> và <span className="font-bold text-amber-400 bg-white/5 px-1 py-0.5 rounded">+</span> để thay đổi điểm số phát biểu cho từng học sinh theo ngày học đã chọn.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })()}

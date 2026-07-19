@@ -175,6 +175,7 @@ export default function PublicPortal({
   // Participation tracker (Bảng theo dõi học tập) state
   // Key format: studentId_subject -> count
   const [participationData, setParticipationData] = useState<Record<string, number>>({});
+  const [participationGroupFilter, setParticipationGroupFilter] = useState<string>('all');
 
   // Enhanced week-based duty scheduling states for public portal
   const [weekConfig, setWeekConfig] = useState(() => getWeekConfig());
@@ -276,21 +277,14 @@ export default function PublicPortal({
         setParticipationData({});
       }
     } else {
-      // Seed realistic data for the class students
+      // By default, set all students' participation counts to 0 for a new day
       const classStudents = students.filter(s => s.classId === timetableClassId);
       const seeded: Record<string, number> = {};
       const subjectsList = ['Toán', 'Lý', 'Hóa', 'Văn', 'Anh', 'Sử', 'Địa', 'Tin'];
       
       classStudents.forEach(s => {
-        // deterministic but random-looking seed based on student ID string hash
-        let hash = 0;
-        for (let i = 0; i < s.id.length; i++) {
-          hash = s.id.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        
-        subjectsList.forEach((sub, subIdx) => {
-          const valHash = Math.abs((hash + subIdx) % 7);
-          seeded[`${s.id}_${sub}`] = valHash === 0 ? 0 : valHash > 4 ? Math.abs(hash % 3) : Math.abs(hash % 5);
+        subjectsList.forEach((sub) => {
+          seeded[`${s.id}_${sub}`] = 0;
         });
       });
       setParticipationData(seeded);
@@ -447,6 +441,7 @@ export default function PublicPortal({
   // Violation stats states
   const [violationStatsClassId, setViolationStatsClassId] = useState<string>('all');
   const [violationStatsMonth, setViolationStatsMonth] = useState<string>('all');
+  const [detailTab, setDetailTab] = useState<'discipline' | 'attendance'>('discipline');
 
   // Keep search and stats inputs updated when classes load or year changes
   useEffect(() => {
@@ -1983,36 +1978,92 @@ export default function PublicPortal({
                             <Clock size={16} className="text-blue-500" /> SỔ GHI CHÉP CHI TIẾT
                           </h3>
 
-                          <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2.5">
-                            {filteredStatsViolations.map((v) => {
-                              const std = students.find(s => s.id === v.studentId) || allStudents.find(s => s.id === v.studentId);
-                              const classItem = classes.find(c => c.id === v.classId) || allClasses.find(c => c.id === v.classId);
-
+                          {(() => {
+                            const isAttendance = (typeStr: string) => {
+                              const t = (typeStr || '').toLowerCase();
                               return (
-                                <div key={v.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5 hover:border-slate-200 transition">
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <p className="text-xs font-black text-slate-800">{v.studentName || std?.name || 'Học sinh'}</p>
-                                      <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-0.5">
-                                        Lớp {classItem?.name || v.className} • Ngày {(v.date || '').split('-').reverse().join('/')}
-                                      </p>
+                                t.includes('nghỉ học') ||
+                                t.includes('nghi hoc') ||
+                                t.includes('vắng') ||
+                                t.includes('vang') ||
+                                t.includes('cp') ||
+                                t.includes('kp') ||
+                                t.includes('trễ') ||
+                                t.includes('tre') ||
+                                t.includes('muộn') ||
+                                t.includes('muon')
+                              );
+                            };
+
+                            const attendanceList = filteredStatsViolations.filter(v => isAttendance(v.type));
+                            const disciplineList = filteredStatsViolations.filter(v => !isAttendance(v.type));
+                            const displayedList = detailTab === 'attendance' ? attendanceList : disciplineList;
+
+                            return (
+                              <>
+                                {/* Tab Selectors */}
+                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100/80 rounded-2xl flex-shrink-0 select-none">
+                                  <button
+                                    onClick={() => setDetailTab('discipline')}
+                                    className={`py-2 text-xs font-bold rounded-xl transition-all ${
+                                      detailTab === 'discipline'
+                                        ? 'bg-white text-blue-900 shadow-sm border border-slate-200/50 font-black'
+                                        : 'text-slate-600 hover:bg-slate-100/50 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    Kỷ Luật ({disciplineList.length})
+                                  </button>
+                                  <button
+                                    onClick={() => setDetailTab('attendance')}
+                                    className={`py-2 text-xs font-bold rounded-xl transition-all ${
+                                      detailTab === 'attendance'
+                                        ? 'bg-white text-blue-900 shadow-sm border border-slate-200/50 font-black'
+                                        : 'text-slate-600 hover:bg-slate-100/50 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    Chuyên cần ({attendanceList.length})
+                                  </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-2.5">
+                                  {displayedList.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 border border-dashed border-slate-100 rounded-2xl">
+                                      <p className="text-slate-400 text-xs italic font-bold">Không có bản ghi nào trong mục này.</p>
                                     </div>
-                                    <span className="text-[10px] font-black bg-red-50 text-red-600 px-2 py-0.5 rounded-lg border border-red-100">
-                                      -{Math.abs(v.points)}đ
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] font-bold text-slate-700 bg-white px-2 py-1.5 rounded-lg border border-slate-200/40">
-                                    {v.type}
-                                  </p>
-                                  {v.note && (
-                                    <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                                      Ghi chú: {v.note}
-                                    </p>
+                                  ) : (
+                                    displayedList.map((v) => {
+                                      const std = students.find(s => s.id === v.studentId) || allStudents.find(s => s.id === v.studentId);
+                                      const classItem = classes.find(c => c.id === v.classId) || allClasses.find(c => c.id === v.classId);
+
+                                      return (
+                                        <div key={v.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5 hover:border-slate-200 transition">
+                                          <div className="flex justify-between items-start">
+                                            <div>
+                                              <p className="text-xs font-black text-slate-800">{v.studentName || std?.name || 'Học sinh'}</p>
+                                              <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-0.5">
+                                                Lớp {classItem?.name || v.className} • Ngày {(v.date || '').split('-').reverse().join('/')}
+                                              </p>
+                                            </div>
+                                            <span className="text-[10px] font-black bg-red-50 text-red-600 px-2 py-0.5 rounded-lg border border-red-100">
+                                              -{Math.abs(v.points)}đ
+                                            </span>
+                                          </div>
+                                          <p className="text-[11px] font-bold text-slate-700 bg-white px-2 py-1.5 rounded-lg border border-slate-200/40">
+                                            {v.type}
+                                          </p>
+                                          {v.note && (
+                                            <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                                              Ghi chú: {v.note}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })
                                   )}
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     ) : (
@@ -2576,6 +2627,10 @@ export default function PublicPortal({
                   {/* SUBTAB: DẶN DÒ HÀNG NGÀY & BẢNG THEO DÕI HỌC TẬP */}
                   {timetableSubTab === 'reminders' && (() => {
                     const classStudents = students.filter(s => s.classId === timetableClassId);
+                    const displayedClassStudents = classStudents.filter(s => {
+                      if (participationGroupFilter === 'all') return true;
+                      return s.groupName === participationGroupFilter;
+                    });
                     const vnDateLabel = formatVietnameseDate(selectedDate);
                     const subjectsList = ['Toán', 'Lý', 'Hóa', 'Văn', 'Anh', 'Sử', 'Địa', 'Tin'];
 
@@ -2653,11 +2708,29 @@ export default function PublicPortal({
 
                         {/* Learning Participation Board exactly as requested */}
                         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                          <div className="pb-2 border-b border-slate-100">
-                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                              <TrendingUp size={15} className="text-emerald-500" /> BẢNG THEO DÕI HỌC TẬP (SỐ LẦN PHÁT BIỂU XÂY DỰNG BÀI)
-                            </h3>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{vnDateLabel}.</p>
+                          <div className="pb-2 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <TrendingUp size={15} className="text-emerald-500" /> BẢNG THEO DÕI HỌC TẬP (SỐ LẦN PHÁT BIỂU XÂY DỰNG BÀI)
+                              </h3>
+                              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{vnDateLabel}.</p>
+                            </div>
+
+                            {/* Dropdown listbox for group filter */}
+                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                              <span className="text-[10px] font-black text-slate-500">TỔ:</span>
+                              <select
+                                value={participationGroupFilter}
+                                onChange={(e) => setParticipationGroupFilter(e.target.value)}
+                                className="bg-transparent text-slate-700 font-bold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer"
+                              >
+                                <option value="all">Cả lớp</option>
+                                <option value="Tổ 1">Tổ 1</option>
+                                <option value="Tổ 2">Tổ 2</option>
+                                <option value="Tổ 3">Tổ 3</option>
+                                <option value="Tổ 4">Tổ 4</option>
+                              </select>
+                            </div>
                           </div>
 
                           <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-3xs custom-scrollbar">
@@ -2672,8 +2745,8 @@ export default function PublicPortal({
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {classStudents.length > 0 ? (
-                                  classStudents.map((student, sIdx) => (
+                                {displayedClassStudents.length > 0 ? (
+                                  displayedClassStudents.map((student, sIdx) => (
                                     <tr key={student.id} className="hover:bg-slate-50/40 transition">
                                       <td className="py-3 px-4 font-black text-slate-400 text-center font-mono">{sIdx + 1}</td>
                                       <td className="py-3 px-4 font-extrabold text-slate-800">{student.name}</td>
@@ -2699,7 +2772,7 @@ export default function PublicPortal({
                                 ) : (
                                   <tr>
                                     <td colSpan={10} className="py-8 text-center text-slate-400 italic font-medium select-none">
-                                      Chưa có danh sách học sinh cho lớp này.
+                                      Chưa có danh sách học sinh cho tổ này.
                                     </td>
                                   </tr>
                                 )}

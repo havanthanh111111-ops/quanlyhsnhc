@@ -5,15 +5,14 @@
 
 import React, { useState, useRef } from 'react';
 import { WeeklyPlan } from '../types';
-import { Plus, Calendar, FileText, Download, Sparkles, BookOpen, Edit2, CheckCircle2, Printer } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { Plus, Calendar, FileText, Sparkles, BookOpen, Edit2, CheckCircle2, Printer, Trash2, AlertTriangle, X } from 'lucide-react';
 import { getWeekConfig, generateWeeks } from '../utils/weekUtils';
 
 interface WeeklyPlannerProps {
   plans: WeeklyPlan[];
   onAddPlan: (plan: WeeklyPlan) => void;
   onUpdatePlan: (plan: WeeklyPlan) => void;
+  onDeletePlan?: (id: string) => void;
   activeClassName?: string;
   teacherName?: string;
   isReadOnly?: boolean;
@@ -23,6 +22,7 @@ export default function WeeklyPlanner({
   plans,
   onAddPlan,
   onUpdatePlan,
+  onDeletePlan,
   activeClassName,
   teacherName,
   isReadOnly = false
@@ -30,6 +30,7 @@ export default function WeeklyPlanner({
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(plans[0]?.id || null);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Form states
@@ -40,11 +41,6 @@ export default function WeeklyPlanner({
   const [objectives, setObjectives] = useState('');
   const [teacherNotes, setTeacherNotes] = useState('');
   const [createdAt, setCreatedAt] = useState('');
-
-  // Fallback PDF download state
-  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
-  const [pdfFilename, setPdfFilename] = useState<string>('');
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const selectedPlan = plans.find(p => p.id === selectedPlanId);
 
@@ -80,8 +76,6 @@ export default function WeeklyPlanner({
     setObjectives('- ');
     setTeacherNotes('');
     setCreatedAt(new Date().toISOString().split('T')[0]);
-    setPdfDownloadUrl(null);
-    setPdfFilename('');
     setIsEditing(false);
     setIsAdding(true);
   };
@@ -94,8 +88,6 @@ export default function WeeklyPlanner({
     setObjectives(p.objectives);
     setTeacherNotes(p.teacherNotes);
     setCreatedAt(p.createdAt || new Date().toISOString().split('T')[0]);
-    setPdfDownloadUrl(null);
-    setPdfFilename('');
     setIsAdding(false);
     setIsEditing(true);
   };
@@ -127,8 +119,15 @@ export default function WeeklyPlanner({
       onUpdatePlan(planData);
       setIsEditing(false);
     }
-    setPdfDownloadUrl(null);
-    setPdfFilename('');
+  };
+
+  const handleDelete = () => {
+    if (selectedPlanId && onDeletePlan) {
+      onDeletePlan(selectedPlanId);
+      const remaining = plans.filter(p => p.id !== selectedPlanId);
+      setSelectedPlanId(remaining[0]?.id || null);
+      setConfirmDeleteOpen(false);
+    }
   };
 
   // Helper date formatters
@@ -156,62 +155,6 @@ export default function WeeklyPlanner({
     return `TP. Hồ Chí Minh, ngày ... tháng ... năm ...`;
   };
 
-  // HTML to PDF export function
-  const handleExportPDF = async () => {
-    if (!printRef.current) return;
-    setIsGeneratingPdf(true);
-    setPdfDownloadUrl(null);
-    try {
-      const element = printRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2, // higher resolution
-        useCORS: true
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210; // A4 page size
-      const pageHeight = 295;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      
-      const filename = `KeHoachTuan_${weekNumber}.pdf`;
-      
-      const pdfBlob = pdf.output('blob');
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      setPdfDownloadUrl(blobUrl);
-      setPdfFilename(filename);
-
-      try {
-        pdf.save(filename);
-      } catch (saveError) {
-        console.warn("Direct pdf.save failed inside iframe, using blob URL fallback", saveError);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-    } catch (error: any) {
-      console.error('Lỗi xuất PDF:', error);
-      alert('Đã có lỗi xảy ra khi xuất tệp PDF. Lỗi: ' + (error?.message || error || 'Lỗi không xác định'));
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
     const formatPlanText = (text: string) => {
     if (!text) return null;
     return text.split('\n').map((line, idx) => {
@@ -235,16 +178,16 @@ export default function WeeklyPlanner({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="weekly-planner-section">
       {/* Left panel: Plan Timeline & Add button */}
-      <div className="lg:col-span-4 bg-[#111] rounded-3xl border border-white/5 shadow-lg p-5 h-[700px] flex flex-col">
+      <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 shadow-sm p-5 h-[700px] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2 uppercase tracking-wider">
-            <BookOpen size={16} className="text-amber-500" /> Kế hoạch tuần
+          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wider">
+            <BookOpen size={16} className="text-blue-600" /> Kế hoạch tuần
           </h2>
           {!isReadOnly && (
             <button
               id="btn-add-plan"
               onClick={handleOpenAdd}
-              className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-black px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm"
+              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm"
             >
               <Plus size={14} /> Tạo mới
             </button>
@@ -254,7 +197,7 @@ export default function WeeklyPlanner({
         {/* Plan List */}
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
           {plans.length === 0 ? (
-            <div className="text-center py-12 text-white/30 text-xs italic">
+            <div className="text-center py-12 text-slate-400 text-xs italic">
               Chưa có kế hoạch tuần nào được lập
             </div>
           ) : (
@@ -271,20 +214,20 @@ export default function WeeklyPlanner({
                   }}
                   className={`p-4 rounded-xl border transition cursor-pointer text-xs ${
                     isSelected
-                      ? 'border-amber-500/80 bg-white/5 shadow-md'
-                      : 'border-white/5 hover:border-white/10 bg-white/[0.01]'
+                      ? 'border-blue-500 bg-blue-50/40 shadow-sm'
+                      : 'border-slate-100 hover:border-slate-200 bg-white hover:bg-slate-50/50'
                   }`}
                 >
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded uppercase tracking-wider font-mono">
+                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded uppercase tracking-wider font-mono">
                       Tuần {p.weekNumber}
                     </span>
-                    <span className="text-[10px] text-white/30 flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
                       <Calendar size={10} /> {formatPlanDate(p.createdAt)}
                     </span>
                   </div>
-                  <h4 className="font-semibold text-white line-clamp-1 mb-1">{p.title}</h4>
-                  <p className="text-[11px] text-white/40 line-clamp-2">{p.objectives}</p>
+                  <h4 className="font-semibold text-slate-800 line-clamp-1 mb-1">{p.title}</h4>
+                  <p className="text-[11px] text-slate-500 line-clamp-2">{p.objectives}</p>
                 </div>
               );
             })
@@ -296,37 +239,37 @@ export default function WeeklyPlanner({
       <div className="lg:col-span-8 h-[700px]">
         {isAdding || isEditing ? (
           /* Create or Edit Plan Form */
-          <div className="bg-[#111] rounded-3xl border border-white/5 shadow-lg p-6 h-full flex flex-col">
-            <h3 className="text-base font-semibold text-white mb-4 border-b border-white/5 pb-3 uppercase tracking-wider">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 h-full flex flex-col">
+            <h3 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3 uppercase tracking-wider">
               {isAdding ? 'Soạn thảo kế hoạch tuần mới' : `Chỉnh sửa: Kế hoạch tuần ${weekNumber}`}
             </h3>
 
             <form onSubmit={handleSave} className="space-y-4 flex-1 overflow-y-auto pr-1">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Số tuần</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Số tuần</label>
                   <input
                     id="form-plan-week"
                     type="number"
                     required
                     value={weekNumber}
                     onChange={(e) => handleWeekNumberChange(parseInt(e.target.value, 10) || 0)}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block font-sans">Ngày lập kế hoạch (Ngày ký giấy)</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block font-sans">Ngày lập kế hoạch (Ngày ký giấy)</label>
                   <input
                     id="form-plan-createdat"
                     type="date"
                     required
                     value={createdAt}
                     onChange={(e) => setCreatedAt(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 font-mono"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Khoảng thời gian áp dụng <span className="text-rose-500">*</span></label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Khoảng thời gian áp dụng <span className="text-rose-500">*</span></label>
                   <input
                     id="form-plan-range"
                     type="text"
@@ -334,13 +277,13 @@ export default function WeeklyPlanner({
                     placeholder="VD: 22/06/2026 - 28/06/2026"
                     value={dateRange}
                     onChange={(e) => setDateRange(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Tiêu đề kế hoạch <span className="text-rose-500">*</span></label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Tiêu đề kế hoạch <span className="text-rose-500">*</span></label>
                 <input
                   id="form-plan-title"
                   type="text"
@@ -348,48 +291,48 @@ export default function WeeklyPlanner({
                   placeholder="Nhập tiêu đề khái quát..."
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition font-semibold"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Mục tiêu cốt lõi tuần này</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Mục tiêu cốt lõi tuần này</label>
                   <textarea
                     id="form-plan-objectives"
                     placeholder="Nhập các mục tiêu trọng điểm (Mỗi dòng một mục tiêu)..."
                     rows={4}
                     value={objectives}
                     onChange={(e) => setObjectives(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 resize-none font-sans"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition resize-none font-sans"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Ghi chú riêng của Giáo viên</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Ghi chú riêng của Giáo viên</label>
                   <textarea
                     id="form-plan-notes"
                     placeholder="Những học sinh cần chú ý, tài liệu bổ sung..."
                     rows={4}
                     value={teacherNotes}
                     onChange={(e) => setTeacherNotes(e.target.value)}
-                    className="w-full bg-amber-500/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 resize-none font-sans"
+                    className="w-full bg-amber-50/20 border border-amber-200/40 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition resize-none font-sans"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Nội dung kế hoạch chi tiết</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Nội dung kế hoạch chi tiết</label>
                 <textarea
                   id="form-plan-content"
                   placeholder="Nhập lịch trình giảng dạy, các mốc thời gian quan trọng..."
                   rows={8}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-amber-500 resize-none font-mono"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white transition resize-none font-mono"
                 />
               </div>
 
-              <div className="flex gap-3 justify-end pt-4 border-t border-white/5 mt-auto">
+              <div className="flex gap-3 justify-end pt-4 border-t border-slate-100 mt-auto">
                 <button
                   id="form-plan-cancel"
                   type="button"
@@ -397,14 +340,14 @@ export default function WeeklyPlanner({
                     setIsAdding(false);
                     setIsEditing(false);
                   }}
-                  className="px-5 py-2 bg-white/5 hover:bg-white/10 text-white/80 border border-white/5 rounded-xl text-xs font-medium transition"
+                  className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   id="form-plan-submit"
                   type="submit"
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-black rounded-xl text-xs font-bold transition shadow-sm"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition shadow-sm"
                 >
                   Lưu kế hoạch
                 </button>
@@ -413,48 +356,39 @@ export default function WeeklyPlanner({
           </div>
         ) : selectedPlan ? (
           /* Plan View & PDF Exporter */
-          <div className="bg-[#111] rounded-3xl border border-white/5 shadow-lg p-6 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/5">
-              <span className="text-white/30 text-xs font-mono uppercase tracking-wider">Xem kế hoạch</span>
-              <div className="flex gap-2">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 h-full flex flex-col">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b border-slate-100 gap-3">
+              <span className="text-slate-400 text-xs font-mono uppercase tracking-wider">Xem kế hoạch</span>
+              <div className="flex flex-wrap gap-2">
+                {!isReadOnly && (
+                  <button
+                    id="plan-delete-btn"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    className="flex items-center gap-1.5 border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-semibold transition animate-fadeIn"
+                  >
+                    <Trash2 size={12} /> Xóa kế hoạch
+                  </button>
+                )}
                 {!isReadOnly && (
                   <button
                     id="plan-edit-btn"
                     onClick={() => handleOpenEdit(selectedPlan)}
-                    className="flex items-center gap-1.5 border border-white/10 hover:bg-white/5 text-white/80 px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                    className="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 bg-white px-3 py-1.5 rounded-xl text-xs font-semibold transition"
                   >
                     <Edit2 size={12} /> Chỉnh sửa
                   </button>
                 )}
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm"
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
                 >
                   <Printer size={12} /> In kế hoạch / Lưu PDF
                 </button>
               </div>
             </div>
 
-            {pdfDownloadUrl && (
-              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs animate-fadeIn">
-                <div className="space-y-0.5">
-                  <p className="text-amber-400 font-bold">🎉 Kế hoạch tuần {selectedPlan.weekNumber} đã sẵn sàng!</p>
-                  <p className="text-white/50 text-[10px] leading-relaxed">Nếu tệp chưa tự động tải xuống (do bảo mật iframe), vui lòng nhấn nút bên dưới:</p>
-                </div>
-                <a
-                  href={pdfDownloadUrl}
-                  download={pdfFilename}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold text-[11px] transition shrink-0 shadow-sm"
-                >
-                  <Download size={12} /> Tải xuống thủ công
-                </a>
-              </div>
-            )}
-
             {/* A4 Printed Area */}
-            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar bg-black/40 p-4 rounded-2xl border border-white/5">
+            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar bg-slate-50/50 p-4 rounded-2xl border border-slate-200/60">
               <div
                 ref={printRef}
                 id="weekly-plan-print-preview"
@@ -533,12 +467,49 @@ export default function WeeklyPlanner({
             </div>
           </div>
         ) : (
-          <div className="bg-[#111] rounded-3xl border border-white/5 shadow-lg p-12 text-center text-white/30 h-full flex flex-col justify-center items-center">
-            <FileText size={48} className="text-white/10 mb-2" />
-            <p className="text-xs">Vui lòng chọn một kế hoạch hoặc tạo mới để hiển thị</p>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center text-slate-400 h-full flex flex-col justify-center items-center">
+            <FileText size={48} className="text-slate-300 mb-2" />
+            <p className="text-xs font-medium">Vui lòng chọn một kế hoạch hoặc tạo mới để hiển thị</p>
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {confirmDeleteOpen && selectedPlan && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-50 text-red-500 rounded-xl animate-pulse">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Xác nhận xóa</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Hành động này không thể hoàn tác.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+              Bạn có chắc chắn muốn xóa kế hoạch <span className="font-extrabold text-rose-600">"{selectedPlan.title}"</span> hay không?
+            </p>
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition border border-slate-200"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition border border-red-500/20 shadow-md"
+              >
+                Đồng ý xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

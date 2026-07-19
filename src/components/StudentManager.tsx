@@ -275,7 +275,79 @@ export default function StudentManager({
     setPdfDownloadUrl(null);
     try {
       const element = reportPdfRef.current;
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      
+      const oklchToRgb = (color: string): string => {
+        if (!color || !color.includes('oklch')) return color;
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return color;
+          ctx.fillStyle = color;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+          return `rgba(${r}, ${g}, ${b}, ${a / 255})`;
+        } catch (e) {
+          return color;
+        }
+      };
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+          const elements = clonedDoc.getElementsByTagName('*');
+          for (let i = 0; i < elements.length; i++) {
+            const el = elements[i] as HTMLElement;
+            try {
+              const computed = window.getComputedStyle(el);
+              
+              const bg = computed.backgroundColor;
+              if (bg && bg.includes('oklch')) {
+                el.style.backgroundColor = oklchToRgb(bg);
+              }
+              
+              const col = computed.color;
+              if (col && col.includes('oklch')) {
+                el.style.color = oklchToRgb(col);
+              }
+              
+              const bc = computed.borderColor;
+              if (bc && bc.includes('oklch')) {
+                el.style.borderColor = oklchToRgb(bc);
+              }
+
+              const borderTopColor = computed.borderTopColor;
+              if (borderTopColor && borderTopColor.includes('oklch')) {
+                el.style.borderTopColor = oklchToRgb(borderTopColor);
+              }
+
+              const borderBottomColor = computed.borderBottomColor;
+              if (borderBottomColor && borderBottomColor.includes('oklch')) {
+                el.style.borderBottomColor = oklchToRgb(borderBottomColor);
+              }
+
+              const borderLeftColor = computed.borderLeftColor;
+              if (borderLeftColor && borderLeftColor.includes('oklch')) {
+                el.style.borderLeftColor = oklchToRgb(borderLeftColor);
+              }
+
+              const borderRightColor = computed.borderRightColor;
+              if (borderRightColor && borderRightColor.includes('oklch')) {
+                el.style.borderRightColor = oklchToRgb(borderRightColor);
+              }
+
+              const outlineColor = computed.outlineColor;
+              if (outlineColor && outlineColor.includes('oklch')) {
+                el.style.outlineColor = oklchToRgb(outlineColor);
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
