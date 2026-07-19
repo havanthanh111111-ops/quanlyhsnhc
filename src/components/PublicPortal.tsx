@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { db, onSnapshot, collection, doc } from '../lib/firebase';
+import { db, onSnapshot, collection, doc, getDoc, setDoc } from '../lib/firebase';
 import { 
   GraduationCap, 
   Phone, 
@@ -29,7 +29,8 @@ import {
   FileText,
   AlertCircle,
   X,
-  Maximize2
+  Maximize2,
+  Sparkles
 } from 'lucide-react';
 import { 
   Student, 
@@ -129,6 +130,96 @@ export default function PublicPortal({
   // Contact form state
   const [contactForm, setContactForm] = useState({ name: '', phone: '', email: '', message: '' });
   const [contactSuccess, setContactSuccess] = useState(false);
+
+  // Visitor counter state
+  const [visitorStats, setVisitorStats] = useState({
+    online: 5,
+    today: 85,
+    total: 2450
+  });
+
+  const getTodayDateString = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Visitor counter logic
+  useEffect(() => {
+    // 1. Setup simulated fluctuation for online users
+    const interval = setInterval(() => {
+      setVisitorStats(prev => {
+        const diff = Math.random() > 0.5 ? 1 : -1;
+        let nextOnline = prev.online + diff;
+        if (nextOnline < 3) nextOnline = 3;
+        if (nextOnline > 9) nextOnline = 9;
+        return { ...prev, online: nextOnline };
+      });
+    }, 15000);
+
+    // 2. Load or increment the visitor count from Firestore
+    const visitorsRef = doc(db, 'statistics', 'visitors');
+    let unsub: (() => void) | null = null;
+
+    const runCounter = async () => {
+      try {
+        const todayStr = getTodayDateString();
+        const docSnap = await getDoc(visitorsRef);
+        
+        let currentTotal = 15340; // realistic default total
+        let currentToday = 142;   // realistic default today
+        let lastDate = todayStr;
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          currentTotal = Number(data.total) || currentTotal;
+          currentToday = Number(data.today) || currentToday;
+          lastDate = data.lastDate || todayStr;
+        }
+
+        const isNewSession = !sessionStorage.getItem('portal_counted');
+        if (isNewSession) {
+          sessionStorage.setItem('portal_counted', 'true');
+          currentTotal += 1;
+          
+          if (lastDate === todayStr) {
+            currentToday += 1;
+          } else {
+            currentToday = 1;
+            lastDate = todayStr;
+          }
+
+          // Save back
+          await setDoc(visitorsRef, {
+            total: currentTotal,
+            today: currentToday,
+            lastDate: lastDate
+          });
+        }
+
+        // Setup real-time listener to get the latest statistics
+        unsub = onSnapshot(visitorsRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setVisitorStats(prev => ({
+              online: prev.online,
+              today: Number(data.today) || 120,
+              total: Number(data.total) || 15300
+            }));
+          }
+        });
+
+      } catch (err) {
+        console.error("Error with visitor counter:", err);
+      }
+    };
+
+    runCounter();
+
+    return () => {
+      clearInterval(interval);
+      if (unsub) unsub();
+    };
+  }, []);
 
   // Sub-tabs state for statistics and charts
   const [statsSubTab, setStatsSubTab] = useState<'academic' | 'violations'>('academic');
@@ -2907,25 +2998,97 @@ export default function PublicPortal({
                     </div>
 
                     {/* Right panel: Selected plan details */}
-                    <div className="lg:col-span-2 border-l border-slate-100 pl-0 lg:pl-6 space-y-4">
+                    <div className="lg:col-span-2 border-l border-slate-100 pl-0 lg:pl-6">
                       {activePlan ? (
-                        <div className="space-y-4">
-                          <div className="space-y-1.5">
-                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Mục tiêu trọng tâm</p>
-                            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
-                              {activePlan.objectives || 'Chưa thiết lập mục tiêu chi tiết.'}
-                            </div>
-                          </div>
+                        (() => {
+                          const planClassItem = classes.find(c => c.id === timetableClassId);
+                          const planTeacher = planClassItem ? teachers.find(t => t.id === planClassItem.teacherId) : null;
+                          const planTeacherName = planTeacher ? planTeacher.name : 'Chưa phân công';
 
-                          <div className="space-y-1.5">
-                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Nội dung chi tiết hoạt động</p>
-                            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-600 font-medium leading-relaxed whitespace-pre-wrap">
-                              {activePlan.content || 'Chưa cập nhật nội dung hoạt động.'}
+                          // Helper to format date in DD/MM/YYYY format
+                          const getFormattedDate = (dateStr: string) => {
+                            if (!dateStr) return '';
+                            const parts = dateStr.split('-');
+                            if (parts.length === 3) {
+                              return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                            }
+                            return dateStr;
+                          };
+
+                          return (
+                            <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 sm:p-8 space-y-6 text-slate-800">
+                              {/* Header Section (Identical to mockup) */}
+                              <div className="text-center pb-4 border-b-2 border-slate-850 space-y-1">
+                                <h1 className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-slate-500">TRƯỜNG THPT NGUYỄN HỮU CẦU</h1>
+                                <h2 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight">KẾ HOẠCH TUẦN GIÁO VIÊN CHỦ NHIỆM</h2>
+                                <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-3 text-[11px] sm:text-xs text-slate-500 font-medium pt-1 select-none">
+                                  <span>Lớp: <strong className="text-slate-700">{planClassItem?.name || 'Chưa cập nhật'}</strong></span>
+                                  <span className="text-slate-300">•</span>
+                                  <span>Tuần học: <strong className="text-slate-700">{activePlan.weekNumber}</strong></span>
+                                  <span className="text-slate-300">•</span>
+                                  <span>Từ: <strong className="text-slate-700">{activePlan.dateRange}</strong></span>
+                                </div>
+                              </div>
+
+                              {/* Title Section */}
+                              <div className="space-y-1">
+                                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                                  {activePlan.title}
+                                </h3>
+                                <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
+                                  Lập ngày: <span className="font-semibold">{getFormattedDate(activePlan.createdAt)}</span> - GVCN: <span className="text-slate-500 font-bold italic">{planTeacherName}</span>
+                                </p>
+                              </div>
+
+                              {/* Two Columns Side by Side: Objectives and Notes */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Left Card: Objectives */}
+                                <div className="bg-amber-50/15 border border-amber-200/60 rounded-2xl p-4 space-y-3 shadow-sm hover:shadow-md transition duration-200">
+                                  <h4 className="text-[11px] sm:text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                                    <Sparkles size={13} className="text-blue-500" />
+                                    MỤC TIÊU TRỌNG ĐIỂM
+                                  </h4>
+                                  <ul className="space-y-1.5 text-xs text-slate-700 font-medium leading-relaxed">
+                                    {(activePlan.objectives || 'Chưa thiết lập mục tiêu chi tiết.').split('\n').map((line, i) => {
+                                      const cleanLine = line.replace(/^[-*•]\s*/, '').trim();
+                                      return (
+                                        <li key={i} className="flex items-start gap-1.5">
+                                          <span className="text-blue-500 font-black mt-0.5">•</span>
+                                          <span>{cleanLine || '...'}</span>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+
+                                {/* Right Card: Notes */}
+                                <div className="bg-slate-50/30 border border-slate-200/60 rounded-2xl p-4 space-y-3 shadow-sm hover:shadow-md transition duration-200">
+                                  <h4 className="text-[11px] sm:text-xs font-black text-slate-850 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                                    <FileText size={13} className="text-blue-500" />
+                                    LƯU Ý CHỦ NHIỆM
+                                  </h4>
+                                  <div className="text-xs text-slate-600 font-medium whitespace-pre-wrap leading-relaxed">
+                                    {activePlan.teacherNotes || 'Không có ghi chú thêm cho tuần này.'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Detailed Agenda / Content */}
+                              {activePlan.content && (
+                                <div className="border-t border-slate-100 pt-5 space-y-3">
+                                  <h4 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider select-none">
+                                    Lịch trình & phân công nhiệm vụ
+                                  </h4>
+                                  <div className="prose prose-slate max-w-none text-slate-700">
+                                    {parsePublicMarkdown(activePlan.content)}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        </div>
+                          );
+                        })()
                       ) : (
-                        <div className="p-6 text-center text-slate-400 italic text-xs h-full flex items-center justify-center">
+                        <div className="p-8 text-center text-slate-400 italic text-xs h-full flex items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl">
                           Vui lòng chọn một kế hoạch tuần từ danh sách bên trái để xem chi tiết.
                         </div>
                       )}
@@ -3214,7 +3377,7 @@ export default function PublicPortal({
 
       {/* 5. FOOTER OF WEBSITE */}
       <footer className="bg-[#111827] text-slate-400 py-8 px-6 md:px-12 border-t border-slate-800 text-xs">
-        <div className="max-w-7xl w-full mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="max-w-7xl w-full mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <GraduationCap className="text-blue-500" size={20} />
@@ -3238,6 +3401,38 @@ export default function PublicPortal({
             <h4 className="font-bold text-white text-xs uppercase tracking-wider">Kết nối & Hỗ trợ</h4>
             <p className="text-[11px]">Để được hỗ trợ kỹ thuật hoặc liên hệ trực tiếp Ban giám hiệu nhà trường, vui lòng quay số hotline hỗ trợ hoặc gửi email về hòm thư liên hệ.</p>
             <p className="text-amber-400 font-extrabold text-xs">Hotline 24/7: 0909091634</p>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Thống kê truy cập
+            </h4>
+            <div className="bg-[#1f2937] p-3 rounded-2xl border border-slate-800 space-y-2 text-[11px] text-slate-300">
+              <div className="flex justify-between items-center pb-1.5 border-b border-[#374151]/50">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <Users size={12} className="text-slate-500" />
+                  Đang trực tuyến:
+                </span>
+                <span className="font-mono text-emerald-400 font-black">{visitorStats.online}</span>
+              </div>
+              <div className="flex justify-between items-center pb-1.5 border-b border-[#374151]/50">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <Calendar size={12} className="text-slate-500" />
+                  Hôm nay:
+                </span>
+                <span className="font-mono text-blue-400 font-black">{visitorStats.today}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <BarChart2 size={12} className="text-slate-500" />
+                  Tổng truy cập:
+                </span>
+                <span className="font-mono text-amber-400 font-black">
+                  {visitorStats.total.toLocaleString('vi-VN')}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
@@ -3305,14 +3500,29 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
   
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
+  let currentAlignClass = '';
   
   lines.forEach((line, index) => {
     let trimmed = line.trim();
     
+    // Check for alignment tag start or end
+    if (trimmed.startsWith('<div align="') && trimmed.endsWith('">')) {
+      const alignVal = trimmed.substring(12, trimmed.length - 2);
+      if (alignVal === 'center') currentAlignClass = 'text-center block w-full';
+      else if (alignVal === 'right') currentAlignClass = 'text-right block w-full';
+      else if (alignVal === 'justify') currentAlignClass = 'text-justify block w-full';
+      else if (alignVal === 'left') currentAlignClass = 'text-left block w-full';
+      return;
+    }
+    if (trimmed === '</div>') {
+      currentAlignClass = '';
+      return;
+    }
+    
     // Check for headings
     if (trimmed.startsWith('### ')) {
       elements.push(
-        <h3 key={`h3-${index}`} className="text-sm font-extrabold text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1">
+        <h3 key={`h3-${index}`} className={`text-sm font-extrabold text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1 ${currentAlignClass}`}>
           {parsePublicInline(trimmed.substring(4))}
         </h3>
       );
@@ -3320,7 +3530,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     }
     if (trimmed.startsWith('#### ')) {
       elements.push(
-        <h4 key={`h4-${index}`} className="text-xs font-black text-slate-800 mt-3 mb-1.5">
+        <h4 key={`h4-${index}`} className={`text-xs font-black text-slate-800 mt-3 mb-1.5 ${currentAlignClass}`}>
           {parsePublicInline(trimmed.substring(5))}
         </h4>
       );
@@ -3332,7 +3542,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
       if (trimmed.includes('---')) return; // Ignore separator lines
       const cols = trimmed.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
       elements.push(
-        <div key={`tbl-${index}`} className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded">
+        <div key={`tbl-${index}`} className={`grid grid-cols-3 gap-2 bg-slate-50 p-2.5 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded ${currentAlignClass}`}>
           {cols.map((col, cIdx) => (
             <span key={cIdx} className="font-semibold">{parsePublicInline(col)}</span>
           ))}
@@ -3344,7 +3554,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     // Check for bullet list
     if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
       elements.push(
-        <li key={`li-${index}`} className="text-xs text-slate-600 list-disc ml-4 mb-1.5 leading-relaxed">
+        <li key={`li-${index}`} className={`text-xs text-slate-600 list-disc ml-4 mb-1.5 leading-relaxed ${currentAlignClass}`}>
           {parsePublicInline(trimmed.substring(2))}
         </li>
       );
@@ -3355,7 +3565,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     const numMatch = trimmed.match(/^\d+\.\s(.*)/);
     if (numMatch) {
       elements.push(
-        <li key={`oli-${index}`} className="text-xs text-slate-600 list-decimal ml-4 mb-1.5 leading-relaxed">
+        <li key={`oli-${index}`} className={`text-xs text-slate-600 list-decimal ml-4 mb-1.5 leading-relaxed ${currentAlignClass}`}>
           {parsePublicInline(numMatch[1])}
         </li>
       );
@@ -3370,7 +3580,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     
     // Normal paragraph
     elements.push(
-      <p key={`p-${index}`} className="text-xs text-slate-600 leading-relaxed mb-2.5">
+      <p key={`p-${index}`} className={`text-xs text-slate-600 leading-relaxed mb-2.5 ${currentAlignClass}`}>
         {parsePublicInline(trimmed)}
       </p>
     );
