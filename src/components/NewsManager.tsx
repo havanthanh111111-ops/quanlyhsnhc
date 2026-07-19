@@ -301,14 +301,29 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
   
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
+  let currentAlignClass = '';
   
   lines.forEach((line, index) => {
     let trimmed = line.trim();
     
+    // Check for alignment tag start or end
+    if (trimmed.startsWith('<div align="') && trimmed.endsWith('">')) {
+      const alignVal = trimmed.substring(12, trimmed.length - 2);
+      if (alignVal === 'center') currentAlignClass = 'text-center block w-full';
+      else if (alignVal === 'right') currentAlignClass = 'text-right block w-full';
+      else if (alignVal === 'justify') currentAlignClass = 'text-justify block w-full';
+      else if (alignVal === 'left') currentAlignClass = 'text-left block w-full';
+      return;
+    }
+    if (trimmed === '</div>') {
+      currentAlignClass = '';
+      return;
+    }
+    
     // Check for headings
     if (trimmed.startsWith('### ')) {
       elements.push(
-        <h3 key={`h3-${index}`} className="text-sm font-black text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1">
+        <h3 key={`h3-${index}`} className={`text-sm font-black text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1 ${currentAlignClass}`}>
           {parseInlineElements(trimmed.substring(4))}
         </h3>
       );
@@ -316,7 +331,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     }
     if (trimmed.startsWith('#### ')) {
       elements.push(
-        <h4 key={`h4-${index}`} className="text-xs font-black text-slate-800 mt-3 mb-1.5">
+        <h4 key={`h4-${index}`} className={`text-xs font-black text-slate-800 mt-3 mb-1.5 ${currentAlignClass}`}>
           {parseInlineElements(trimmed.substring(5))}
         </h4>
       );
@@ -328,7 +343,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
       if (trimmed.includes('---')) return; // Ignore separator lines
       const cols = trimmed.split('|').map(c => c.trim()).filter((c, i, arr) => i > 0 && i < arr.length - 1);
       elements.push(
-        <div key={`tbl-${index}`} className="grid grid-cols-3 gap-2 bg-slate-50 p-2 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded">
+        <div key={`tbl-${index}`} className={`grid grid-cols-3 gap-2 bg-slate-50 p-2 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded ${currentAlignClass}`}>
           {cols.map((col, cIdx) => (
             <span key={cIdx} className="font-semibold">{parseInlineElements(col)}</span>
           ))}
@@ -340,7 +355,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     // Check for bullet list
     if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
       elements.push(
-        <li key={`li-${index}`} className="text-xs text-slate-600 list-disc ml-4 mb-1 leading-relaxed">
+        <li key={`li-${index}`} className={`text-xs text-slate-600 list-disc ml-4 mb-1 leading-relaxed ${currentAlignClass}`}>
           {parseInlineElements(trimmed.substring(2))}
         </li>
       );
@@ -351,7 +366,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     const numMatch = trimmed.match(/^\d+\.\s(.*)/);
     if (numMatch) {
       elements.push(
-        <li key={`oli-${index}`} className="text-xs text-slate-600 list-decimal ml-4 mb-1 leading-relaxed">
+        <li key={`oli-${index}`} className={`text-xs text-slate-600 list-decimal ml-4 mb-1 leading-relaxed ${currentAlignClass}`}>
           {parseInlineElements(numMatch[1])}
         </li>
       );
@@ -366,7 +381,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     
     // Normal paragraph
     elements.push(
-      <p key={`p-${index}`} className="text-xs text-slate-700 leading-relaxed mb-1.5">
+      <p key={`p-${index}`} className={`text-xs text-slate-700 leading-relaxed mb-1.5 ${currentAlignClass}`}>
         {parseInlineElements(trimmed)}
       </p>
     );
@@ -826,32 +841,35 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
               
               <div className="border border-slate-200 bg-slate-50/50 rounded-2xl p-2.5 space-y-2">
                 {/* TOOLBAR (Identical to mockup) */}
-                <div className="flex flex-col gap-2 bg-slate-100 p-2 rounded-xl border border-slate-200">
+                <div className="flex flex-col gap-2 bg-slate-100 p-2.5 rounded-xl border border-slate-200 shadow-inner">
                   {/* First row: Basic styles */}
-                  <div className="flex flex-wrap items-center gap-1.5 pb-1.5 border-b border-slate-200">
+                  <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-200">
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('bold')}
-                      className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg transition font-extrabold text-xs cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-black text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="In đậm"
                     >
-                      B
+                      <span className="font-extrabold text-[11px] text-slate-500">B</span>
+                      <span>ĐẬM</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('italic')}
-                      className="w-7 h-7 flex items-center justify-center hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg transition italic text-xs cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer italic"
                       title="In nghiêng"
                     >
-                      I
+                      <span className="font-serif italic text-[11px] text-slate-500 px-0.5">I</span>
+                      <span>NGHIÊNG</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('h3')}
-                      className="w-8 h-7 flex items-center justify-center hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg transition font-bold text-xs cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Tiêu đề H3"
                     >
-                      H3
+                      <span className="font-extrabold text-[10px] text-slate-500">H3</span>
+                      <span>TIÊU ĐỀ</span>
                     </button>
                     
                     <div className="h-4 w-px bg-slate-200 mx-1"></div>
@@ -859,70 +877,78 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('list')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Danh sách"
                     >
-                      <List size={13} />
+                      <List size={11} className="text-slate-450" />
+                      <span>DANH SÁCH</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('table')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Bảng biểu"
                     >
-                      <Table size={13} />
+                      <Table size={11} className="text-slate-450" />
+                      <span>BẢNG</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('link')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Liên kết"
                     >
-                      <LinkIcon size={13} />
+                      <LinkIcon size={11} className="text-slate-450" />
+                      <span>LIÊN KẾT</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('calendar')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Lịch trình"
                     >
-                      <Calendar size={13} />
+                      <Calendar size={11} className="text-slate-450" />
+                      <span>SỰ KIỆN</span>
                     </button>
                   </div>
 
                   {/* Second row: Alignments */}
-                  <div className="flex flex-wrap items-center gap-1.5 pb-1.5 border-b border-slate-200">
+                  <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-slate-200">
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('align-left')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Căn lề trái"
                     >
-                      <AlignLeft size={13} />
+                      <AlignLeft size={11} className="text-slate-450" />
+                      <span>CĂN TRÁI</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('align-center')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Căn giữa"
                     >
-                      <AlignCenter size={13} />
+                      <AlignCenter size={11} className="text-slate-450" />
+                      <span>CĂN GIỮA</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('align-right')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Căn lề phải"
                     >
-                      <AlignRight size={13} />
+                      <AlignRight size={11} className="text-slate-450" />
+                      <span>CĂN PHẢI</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleToolbarAction('align-justify')}
-                      className="p-1.5 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded-lg transition cursor-pointer"
+                      className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 rounded-lg font-bold text-[10px] shadow-sm transition flex items-center gap-1 cursor-pointer"
                       title="Căn đều hai bên"
                     >
-                      <AlignJustify size={13} />
+                      <AlignJustify size={11} className="text-slate-450" />
+                      <span>CĂN ĐỀU</span>
                     </button>
                   </div>
 
