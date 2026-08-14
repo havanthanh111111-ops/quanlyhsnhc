@@ -957,10 +957,14 @@ export default function App() {
           teachers={teachers}
           academicUpdates={academicUpdates}
           onOpenAdmin={() => {
-            setLoginUsername('');
-            setLoginPassword('');
-            setLoginError('');
-            setIsAuthModalOpen(true);
+            if (currentUser) {
+              setViewMode('admin');
+            } else {
+              setLoginUsername('');
+              setLoginPassword('');
+              setLoginError('');
+              setIsAuthModalOpen(true);
+            }
           }}
         />
 
@@ -982,7 +986,7 @@ export default function App() {
                     Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.
                   </p>
                   <p className="text-[11px] text-blue-600 font-sans font-semibold mt-1">
-                    Tài khoản: <strong className="underline font-bold">admin</strong> | Mật khẩu: <strong className="underline font-bold">123456</strong>
+                    Tài khoản: <strong className="underline font-bold">admin</strong> | Mật khẩu hiện tại: <strong className="underline font-bold">{(users.find(u => u.ten === 'admin') || initialUsers[0])?.matkhau || '123456'}</strong>
                   </p>
                 </div>
               </div>
@@ -990,10 +994,7 @@ export default function App() {
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
-                  let foundUser = users.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
-                  if (!foundUser) {
-                    foundUser = initialUsers.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
-                  }
+                  const foundUser = users.find(u => u.ten.toLowerCase() === loginUsername.trim().toLowerCase() && u.matkhau === loginPassword);
                   
                   if (foundUser) {
                     setCurrentUser(foundUser);
@@ -1082,60 +1083,15 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      
-      {/* Sidebar Navigation - Visible on desktop */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 hidden md:flex h-full select-none shadow-sm">
-        <div className="p-8 pb-4 text-left">
-          <h1 className="text-2xl font-serif italic text-slate-900 tracking-tight">THPT Nguyễn Hữu Cầu<span className="text-amber-500">.</span></h1>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mt-2 font-bold">HỆ THỐNG QUẢN LÝ</p>
-
-          <div 
-            onClick={() => dbError && setShowDbHelp(true)}
-            className={`mt-4 p-2.5 rounded-xl border text-[10px] flex flex-col gap-1 select-none transition-all duration-300 ${
-              dbError 
-                ? 'bg-rose-50 border-rose-200/60 cursor-pointer hover:bg-rose-100/70' 
-                : 'bg-slate-50 border-slate-100'
-            }`}
-          >
-            <div className="flex items-center gap-1.5 font-bold">
-              <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-              <span className={dbError ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>
-                {dbError ? 'DỰ PHÒNG CỤC BỘ' : 'ĐỒNG BỘ CLOUD'}
-              </span>
-            </div>
-            <p className="text-[9px] text-slate-500 font-medium leading-relaxed">
-              {dbError 
-                ? 'Không thể ghi vào Firestore. Dữ liệu chỉ đang lưu tạm trên trình duyệt hiện tại.' 
-                : 'Đang liên kết thời gian thực trực tiếp với cơ sở dữ liệu Firebase.'}
-            </p>
-            {dbError && (
-              <span className="text-[9px] font-bold text-blue-600 underline mt-1 block hover:text-blue-800">
-                👉 Click xem cách sửa lỗi kết nối
-              </span>
-            )}
+    <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-800 font-sans overflow-hidden">
+      <div className="flex flex-1 w-full overflow-hidden">
+        
+        {/* Sidebar Navigation - Visible on desktop */}
+        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 hidden md:flex h-full select-none shadow-sm">
+          <div className="p-8 pb-4 text-left">
+            <h1 className="text-2xl font-serif italic text-slate-900 tracking-tight">THPT Nguyễn Hữu Cầu<span className="text-amber-500">.</span></h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mt-2 font-bold">HỆ THỐNG QUẢN LÝ</p>
           </div>
-        </div>
-
-        <div className="px-5 mb-4 space-y-2">
-          <button
-            onClick={() => setViewMode('public')}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[11px] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-600/15"
-          >
-            <span>← Quay lại Web Công Khai</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentUser(null);
-              setViewMode('public');
-            }}
-            className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-[11px] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut size={12} />
-            <span>Đăng xuất Quản trị</span>
-          </button>
-        </div>
 
 
         
@@ -1363,13 +1319,6 @@ export default function App() {
 
         {/* Sidebar Footer with profile info and connection state */}
         <div className="p-5 mt-auto border-t border-slate-150 bg-slate-50/50">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[10px] uppercase tracking-widest text-slate-400 truncate">
-              Cơ sở dữ liệu trực tuyến
-            </span>
-          </div>
-          
           <div className="flex flex-col gap-2 bg-slate-50 border border-slate-200/60 p-3 rounded-xl">
             {/* Giáo viên */}
             <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
@@ -1429,14 +1378,8 @@ export default function App() {
           <div className="p-4 flex items-center justify-between">
             <h1 className="text-lg font-serif italic text-slate-900 tracking-tight">EduAdmin<span className="text-amber-500">.</span></h1>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode('public')}
-                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] rounded-full transition cursor-pointer shadow-sm"
-              >
-                ← Web Công Khai
-              </button>
-              <span className="text-xs text-amber-600 font-semibold">{className}</span>
-              <span className="text-xs text-slate-400">({schoolYear})</span>
+              <span className="text-xs text-amber-600 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">{className}</span>
+              <span className="text-xs text-slate-400 font-mono">({schoolYear})</span>
             </div>
           </div>
           
@@ -1493,7 +1436,9 @@ export default function App() {
             {userRole === 'teacher' && (
               <div className="flex gap-2.5">
                 <button 
+                  disabled={currentUser?.quyen === 'hotro'}
                   onClick={() => {
+                    if (currentUser?.quyen === 'hotro') return;
                     if (activeTab === 'plans') {
                       const btn = document.getElementById('plan-pdf-btn');
                       btn?.click();
@@ -1505,8 +1450,13 @@ export default function App() {
                       alert('Chuyển qua tab Nhiệm vụ & Báo cáo để xuất tệp PDF tổng hợp!');
                     }
                   }}
-                  className="px-4 py-1.5 bg-amber-500 text-white rounded-full text-[11px] font-bold tracking-wider shadow-md shadow-amber-500/15 hover:bg-amber-600 transition cursor-pointer"
+                  className={`px-4 py-1.5 rounded-full text-[11px] font-bold tracking-wider shadow-md transition flex items-center gap-1.5 ${
+                    currentUser?.quyen === 'hotro'
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
+                      : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/15 cursor-pointer'
+                  }`}
                 >
+                  {currentUser?.quyen === 'hotro' && <Lock size={12} />}
                   XUẤT BÁO CÁO PDF
                 </button>
               </div>
@@ -1805,12 +1755,51 @@ export default function App() {
           </div>
 
         </main>
+      </div> {/* Close main workspace */}
+    </div> {/* Close flex flex-1 w-full overflow-hidden */}
 
-        {/* Small design-focused footer */}
-        <footer className="bg-white border-t border-slate-200 py-3 text-center text-[10px] text-slate-400 shrink-0 font-medium select-none tracking-wide">
-          Phần mềm hỗ trợ Giáo viên chủ nhiệm quản lý học sinh & xuất báo cáo PDF tự động
-        </footer>
+    {/* Beautiful Full Width Footer with system controls and connection state */}
+    <footer className="bg-white border-t border-slate-200 px-4 md:px-6 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 select-none shadow-sm z-10">
+      {/* Left: Connection Status */}
+      <div 
+        onClick={() => dbError && setShowDbHelp(true)}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] md:text-[11px] font-bold cursor-pointer transition ${
+          dbError 
+            ? 'bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-100/50' 
+            : 'bg-emerald-50 border-emerald-100 text-emerald-600 hover:bg-emerald-100/50'
+        }`}
+      >
+        <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+        <span>{dbError ? 'DỰ PHÒNG CỤC BỘ' : 'ĐỒNG BỘ CLOUD'}</span>
+        {dbError && <span className="text-[9px] underline opacity-80">(Chi tiết)</span>}
       </div>
+
+      {/* Center: Action Buttons */}
+      <div className="flex items-center gap-2.5">
+        <button
+          onClick={() => setViewMode('public')}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-extrabold text-[10px] md:text-[11px] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-blue-600/15"
+        >
+          <span>← Quay lại Web Công Khai</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setCurrentUser(null);
+            setViewMode('public');
+          }}
+          className="px-4 py-2 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-600 border border-rose-200 font-bold text-[10px] md:text-[11px] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <LogOut size={12} />
+          <span>Đăng xuất Quản trị</span>
+        </button>
+      </div>
+
+      {/* Right: Copyright/App Description */}
+      <div className="text-[9px] md:text-[10px] text-slate-400 font-medium tracking-wide text-center sm:text-right max-w-xs md:max-w-none">
+        Phần mềm hỗ trợ Giáo viên chủ nhiệm quản lý học sinh & xuất báo cáo PDF tự động
+      </div>
+    </footer>
 
 
       {/* Modal Hướng dẫn Gỡ lỗi Kết nối Firebase */}
