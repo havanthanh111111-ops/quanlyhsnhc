@@ -13,6 +13,7 @@ import {
   query,
   where
 } from 'firebase/firestore';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Build config from environment variables if present (useful for Vercel/production deployment)
@@ -34,6 +35,12 @@ const activeConfig = isEnvConfigured ? envConfig : firebaseConfig;
 
 // Initialize Firebase
 const app = initializeApp(activeConfig);
+
+// Silently sign in anonymously to satisfy Firestore security rules
+const auth = getAuth(app);
+signInAnonymously(auth).catch((err) => {
+  console.warn('Anonymous sign-in failed (ensure Anonymous Auth is enabled in your Firebase console):', err);
+});
 
 // Determine the firestore database ID
 let databaseId = activeConfig.firestoreDatabaseId;
