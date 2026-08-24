@@ -30,7 +30,12 @@ import {
   AlertCircle,
   X,
   Maximize2,
-  Sparkles
+  Sparkles,
+  FolderArchive,
+  Folder,
+  ExternalLink,
+  Globe,
+  Link as LinkIcon
 } from 'lucide-react';
 import { 
   Student, 
@@ -40,7 +45,8 @@ import {
   StudentTask, 
   AcademicUpdate,
   Teacher,
-  SchoolYear
+  SchoolYear,
+  DocumentCategory
 } from '../types';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
 import { 
@@ -76,6 +82,7 @@ interface PublicPortalProps {
   tasks: StudentTask[];
   teachers: Teacher[];
   academicUpdates: AcademicUpdate[];
+  documentCategories?: DocumentCategory[];
   onOpenAdmin: () => void;
   initialSchoolYearId?: string;
 }
@@ -89,14 +96,16 @@ export default function PublicPortal({
   tasks: allTasks,
   teachers,
   academicUpdates: allAcademicUpdates,
+  documentCategories: allDocCategories = [],
   onOpenAdmin,
   initialSchoolYearId
 }: PublicPortalProps) {
   // Navigation states
-  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'contact' | 'news'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'contact' | 'news' | 'archive'>('home');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [newsCategoryFilter, setNewsCategoryFilter] = useState<string>('Tất cả');
   const [activeNewsId, setActiveNewsId] = useState<string | null>(null);
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState<string>('');
 
   // School Year filter state
   const [selectedSchoolYearId, setSelectedSchoolYearId] = useState<string>(
@@ -862,55 +871,61 @@ export default function PublicPortal({
       </header>
 
       {/* 3. SITE NAVIGATION BAR */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs px-6 md:px-12 py-1 flex flex-wrap items-center justify-between gap-4 overflow-x-auto">
-        <div className="flex items-center gap-1.5 md:gap-3 py-1">
-          {[
-            { id: 'home', label: 'TRANG CHỦ' },
-            { id: 'about', label: 'GIỚI THIỆU' },
-            { id: 'lookup', label: 'TRA CỨU' },
-            { id: 'stats', label: 'THỐNG KÊ & BIỂU ĐỒ' },
-            { id: 'timetable', label: 'HOẠT ĐỘNG' },
-            { id: 'news', label: 'TIN TỨC' },
-            { id: 'contact', label: 'LIÊN HỆ PHẢN HỒI' }
-          ].map(item => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id as any);
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs px-3 sm:px-6 md:px-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 lg:gap-4 py-1.5 flex-nowrap min-w-0">
+          {/* Navigation Links with smooth scroll on smaller screens */}
+          <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+            {[
+              { id: 'home', label: 'TRANG CHỦ' },
+              { id: 'about', label: 'GIỚI THIỆU' },
+              { id: 'lookup', label: 'TRA CỨU' },
+              { id: 'stats', label: 'THỐNG KÊ & BIỂU ĐỒ' },
+              { id: 'timetable', label: 'HOẠT ĐỘNG' },
+              { id: 'archive', label: 'VĂN BẢN' },
+              { id: 'news', label: 'TIN TỨC' },
+              { id: 'contact', label: 'LIÊN HỆ PHẢN HỒI' }
+            ].map(item => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id as any);
+                    setSelectedStudent(null);
+                  }}
+                  className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                      : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Dynamic School Year Filter */}
+          {schoolYears.length > 0 && (
+            <div className="shrink-0 flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-slate-200">
+              <span className="hidden sm:inline text-[10px] font-black text-slate-400 uppercase tracking-wider select-none whitespace-nowrap">
+                NĂM HỌC:
+              </span>
+              <select
+                value={selectedSchoolYearId}
+                onChange={(e) => {
+                  setSelectedSchoolYearId(e.target.value);
                   setSelectedStudent(null);
                 }}
-                className={`px-3 md:px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide border transition cursor-pointer ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 border-blue-250 shadow-3xs font-black' 
-                    : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-blue-900'
-                }`}
+                className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-2.5 py-1.5 text-xs font-extrabold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer shadow-2xs transition whitespace-nowrap"
               >
-                {item.label}
-              </button>
-            );
-          })}
+                {schoolYears.map(yr => (
+                  <option key={yr.id} value={yr.id}>{yr.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-
-        {/* Dynamic School Year Filter */}
-        {schoolYears.length > 0 && (
-          <div className="flex items-center gap-2 pr-2">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">NĂM HỌC:</span>
-            <select
-              value={selectedSchoolYearId}
-              onChange={(e) => {
-                setSelectedSchoolYearId(e.target.value);
-                setSelectedStudent(null);
-              }}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-blue-900 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 cursor-pointer shadow-inner"
-            >
-              {schoolYears.map(yr => (
-                <option key={yr.id} value={yr.id}>{yr.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </nav>
 
       {/* 4. MAIN CONTAINER (2 COLUMNS: SIDEBAR LEFT + MAIN RIGHT) */}
@@ -1050,6 +1065,7 @@ export default function PublicPortal({
                 {activeTab === 'lookup' && 'TRA CỨU HỌC SINH'}
                 {activeTab === 'stats' && 'THỐNG KÊ & BIỂU ĐỒ'}
                 {activeTab === 'timetable' && 'THỜI KHÓA BIỂU & KẾ HOẠCH'}
+                {activeTab === 'archive' && 'VĂN BẢN & QUY ĐỊNH'}
                 {activeTab === 'news' && 'TIN TỨC & CHUYÊN MỤC'}
                 {activeTab === 'contact' && 'LIÊN HỆ PHẢN HỒI'}
               </span>
@@ -3260,6 +3276,180 @@ export default function PublicPortal({
                 );
               })()}
 
+            </div>
+          )}
+
+          {/* TAB CONTENT: ARCHIVE (KHO VĂN BẢN & QUY ĐỊNH) */}
+          {activeTab === 'archive' && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Archive Header Banner - Bright, High-Contrast & Elegant */}
+              <div className="bg-gradient-to-r from-blue-50 via-indigo-50/70 to-slate-50 border border-blue-200/90 rounded-3xl p-6 md:p-7 shadow-xs relative overflow-hidden">
+                <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-black uppercase tracking-wider shadow-2xs">
+                      <FolderArchive size={13} className="text-amber-300" />
+                      <span>KHO LƯU TRỮ VĂN BẢN TRỰC TUYẾN</span>
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-tight text-blue-950 uppercase font-sans">
+                      VĂN BẢN, QUY ĐỊNH & BIỂU MẪU CHIA SẺ
+                    </h2>
+                    <p className="text-slate-600 text-xs font-medium max-w-2xl leading-relaxed">
+                      Nơi lưu trữ và liên kết đến các file tài liệu hướng dẫn, quy định nề nếp, thang điểm thi đua và kế hoạch hoạt động của nhà trường.
+                    </p>
+                  </div>
+
+                  {/* Search Bar within Archive - Crisp Light Style */}
+                  <div className="relative min-w-[260px] md:w-80 self-start md:self-center shrink-0">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm văn bản, quy định..."
+                      value={archiveSearchQuery}
+                      onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-300 hover:border-blue-400 focus:border-blue-600 rounded-2xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs font-medium"
+                    />
+                    {archiveSearchQuery && (
+                      <button
+                        onClick={() => setArchiveSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer transition"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Category & Documents List */}
+              {(() => {
+                const yearCategories = allDocCategories
+                  .filter(cat => cat.schoolYearId === selectedSchoolYearId)
+                  .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+                const filteredCats = yearCategories
+                  .map(cat => {
+                    // Filter ONLY public documents for public portal
+                    const publicItems = cat.items.filter(item => {
+                      const isPublic = item.visibility !== 'admin_only';
+                      if (!isPublic) return false;
+                      if (!archiveSearchQuery.trim()) return true;
+                      const q = archiveSearchQuery.toLowerCase();
+                      return item.title.toLowerCase().includes(q) || 
+                             item.description?.toLowerCase().includes(q);
+                    });
+
+                    return {
+                      ...cat,
+                      publicItems
+                    };
+                  })
+                  .filter(cat => {
+                    if (archiveSearchQuery.trim()) {
+                      return cat.publicItems.length > 0 || cat.title.toLowerCase().includes(archiveSearchQuery.toLowerCase());
+                    }
+                    return cat.publicItems.length > 0;
+                  });
+
+                if (filteredCats.length === 0) {
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3 shadow-xs">
+                      <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                        <FolderArchive size={26} />
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                        CHƯA CÓ VĂN BẢN CÔNG KHAI
+                      </h3>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        {archiveSearchQuery
+                          ? `Không tìm thấy văn bản nào khớp với từ khóa "${archiveSearchQuery}".`
+                          : 'Hiện chưa có văn bản quy định nào được công khai trong niên học này.'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {filteredCats.map((cat, catIdx) => (
+                      <div 
+                        key={cat.id || catIdx}
+                        className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs"
+                      >
+                        {/* Parent Title / Category Header */}
+                        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3.5 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-blue-600/10 text-blue-700 flex items-center justify-center font-bold">
+                              <Folder size={16} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                  CHỦ ĐỀ
+                                </span>
+                                <h3 className="text-xs md:text-sm font-black text-slate-900 uppercase tracking-tight">
+                                  {cat.title}
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs">
+                            {cat.publicItems.length} văn bản
+                          </span>
+                        </div>
+
+                        {/* Child Documents List */}
+                        <div className="p-4 md:p-6 divide-y divide-slate-100">
+                          {cat.publicItems.map((item, itemIdx) => (
+                            <div 
+                              key={item.id || itemIdx}
+                              className={`py-3.5 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-4 transition hover:bg-slate-50/50 p-2 rounded-2xl`}
+                            >
+                              <div className="space-y-1 flex-1 min-w-0">
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                  <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+                                    <FileText size={13} />
+                                  </div>
+                                  <h4 className="text-xs md:text-sm font-extrabold text-slate-900 tracking-tight uppercase">
+                                    {item.title}
+                                  </h4>
+                                </div>
+
+                                {item.description && (
+                                  <p className="text-xs text-slate-600 pl-8 leading-relaxed">
+                                    {item.description}
+                                  </p>
+                                )}
+
+                                {item.createdAt && (
+                                  <div className="pl-8 text-[10px] text-slate-400 font-mono">
+                                    Cập nhật: {item.createdAt}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Action: READ BUTTON */}
+                              <div className="shrink-0 self-end md:self-center">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 shadow-sm hover:shadow-md cursor-pointer"
+                                >
+                                  <BookOpen size={14} />
+                                  <span>ĐỌC &gt;&gt;</span>
+                                  <ExternalLink size={12} className="opacity-75" />
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
