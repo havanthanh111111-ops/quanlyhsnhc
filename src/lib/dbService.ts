@@ -20,7 +20,8 @@ import {
   AcademicUpdate,
   SheetSyncConfig,
   SystemUser,
-  Announcement
+  Announcement,
+  DocumentCategory
 } from '../types';
 
 // Helper to check if a collection is empty
@@ -227,4 +228,12 @@ export async function saveParticipation(classId: string, date: string, data: Rec
 
 export async function saveDuty(classId: string, weekNumber: number, schedule: any) {
   await setDoc(doc(db, 'duties', `${classId}_week_${weekNumber}`), { classId, weekNumber, schedule });
+}
+
+export async function saveDocumentCategory(item: DocumentCategory) {
+  await setDoc(doc(db, 'documentCategories', item.id), item);
+}
+
+export async function deleteDocumentCategory(id: string) {
+  await deleteDoc(doc(db, 'documentCategories', id));
 }
