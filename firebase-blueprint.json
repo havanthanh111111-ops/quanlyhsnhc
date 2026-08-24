@@ -30,6 +30,9 @@
     },
     "settings": {
       "description": "Cấu hình hệ thống, mã PIN bảo mật, cấu hình đồng bộ"
+    },
+    "documentCategories": {
+      "description": "Kho văn bản, lưu trữ tài liệu phân cấp theo niên học, tiêu đề cha và tiêu đề con (Google Drive link, công khai / chỉ admin)"
     }
   }
 }
