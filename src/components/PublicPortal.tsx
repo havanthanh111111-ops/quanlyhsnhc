@@ -35,7 +35,9 @@ import {
   Folder,
   ExternalLink,
   Globe,
-  Link as LinkIcon
+  Link as LinkIcon,
+  ZoomIn,
+  Image as ImageIcon
 } from 'lucide-react';
 import { 
   Student, 
@@ -131,6 +133,7 @@ export default function PublicPortal({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedAnn, setSelectedAnn] = useState<any | null>(null);
+  const [zoomImage, setZoomImage] = useState<{ url: string; title?: string } | null>(null);
 
   // Timetable class select
   const [timetableClassId, setTimetableClassId] = useState<string>('');
@@ -3249,7 +3252,7 @@ export default function PublicPortal({
 
                           {/* Article Body */}
                           <div className="text-xs text-slate-600 leading-relaxed font-sans space-y-3 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
-                            {parsePublicMarkdown(selectedNews.content || 'Nội dung bài viết đang được cập nhật...')}
+                            {parsePublicMarkdown(selectedNews.content || 'Nội dung bài viết đang được cập nhật...', (url, t) => setZoomImage({ url, title: t }))}
                           </div>
 
                           {/* Article Footer action */}
@@ -3662,7 +3665,7 @@ export default function PublicPortal({
               </h2>
               
               <div className="text-xs text-slate-600 space-y-3 font-sans leading-relaxed">
-                {parsePublicMarkdown(selectedAnn.content)}
+                {parsePublicMarkdown(selectedAnn.content, (url, t) => setZoomImage({ url, title: t }))}
               </div>
             </div>
 
@@ -3680,12 +3683,48 @@ export default function PublicPortal({
         </div>
       )}
 
+      {/* 7. FULLSCREEN LIGHTBOX IMAGE MODAL */}
+      {zoomImage && (
+        <div 
+          onClick={() => setZoomImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn cursor-zoom-out"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col cursor-default"
+          >
+            {/* Lightbox Header */}
+            <div className="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-white">
+              <span className="text-xs font-bold text-slate-300 truncate max-w-md">
+                {zoomImage.title || 'Xem ảnh chi tiết'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+                title="Đóng xem ảnh"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {/* Lightbox Image Container */}
+            <div className="p-3 bg-black flex items-center justify-center overflow-auto max-h-[80vh]">
+              <img
+                src={zoomImage.url}
+                alt={zoomImage.title || 'Phóng to'}
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
 // Simple Markdown parser for the Public website (styled nicely for white/light background)
-const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
+const parsePublicMarkdown = (text: string = '', onImageZoom?: (url: string, title?: string) => void): React.ReactNode => {
   if (!text) return <p className="text-slate-400 italic text-xs">Chưa có nội dung chi tiết cho thông báo này.</p>;
   
   const lines = text.split('\n');
@@ -3713,7 +3752,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     if (trimmed.startsWith('### ')) {
       elements.push(
         <h3 key={`h3-${index}`} className={`text-sm font-extrabold text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1 ${currentAlignClass}`}>
-          {parsePublicInline(trimmed.substring(4))}
+          {parsePublicInline(trimmed.substring(4), onImageZoom)}
         </h3>
       );
       return;
@@ -3721,7 +3760,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     if (trimmed.startsWith('#### ')) {
       elements.push(
         <h4 key={`h4-${index}`} className={`text-xs font-black text-slate-800 mt-3 mb-1.5 ${currentAlignClass}`}>
-          {parsePublicInline(trimmed.substring(5))}
+          {parsePublicInline(trimmed.substring(5), onImageZoom)}
         </h4>
       );
       return;
@@ -3734,7 +3773,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
       elements.push(
         <div key={`tbl-${index}`} className={`grid grid-cols-3 gap-2 bg-slate-50 p-2.5 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded ${currentAlignClass}`}>
           {cols.map((col, cIdx) => (
-            <span key={cIdx} className="font-semibold">{parsePublicInline(col)}</span>
+            <span key={cIdx} className="font-semibold">{parsePublicInline(col, onImageZoom)}</span>
           ))}
         </div>
       );
@@ -3745,7 +3784,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
       elements.push(
         <li key={`li-${index}`} className={`text-xs text-slate-600 list-disc ml-4 mb-1.5 leading-relaxed ${currentAlignClass}`}>
-          {parsePublicInline(trimmed.substring(2))}
+          {parsePublicInline(trimmed.substring(2), onImageZoom)}
         </li>
       );
       return;
@@ -3756,7 +3795,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     if (numMatch) {
       elements.push(
         <li key={`oli-${index}`} className={`text-xs text-slate-600 list-decimal ml-4 mb-1.5 leading-relaxed ${currentAlignClass}`}>
-          {parsePublicInline(numMatch[1])}
+          {parsePublicInline(numMatch[1], onImageZoom)}
         </li>
       );
       return;
@@ -3771,7 +3810,7 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
     // Normal paragraph
     elements.push(
       <p key={`p-${index}`} className={`text-xs text-slate-600 leading-relaxed mb-2.5 ${currentAlignClass}`}>
-        {parsePublicInline(trimmed)}
+        {parsePublicInline(trimmed, onImageZoom)}
       </p>
     );
   });
@@ -3779,51 +3818,95 @@ const parsePublicMarkdown = (text: string = ''): React.ReactNode => {
   return <div className="space-y-0.5">{elements}</div>;
 };
 
-const parsePublicInline = (text: string): React.ReactNode => {
+const parsePublicInline = (text: string, onImageZoom?: (url: string, title?: string) => void): React.ReactNode => {
   if (!text) return '';
   
-  // Handle markdown image: ![desc](url)
-  const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
-  const hasImg = text.match(imgRegex);
-  if (hasImg) {
-    const match = imgRegex.exec(text);
-    if (match) {
-      const desc = match[1];
-      const url = match[2];
-      return (
-        <div className="my-3 rounded-xl overflow-hidden border border-slate-150 shadow-sm max-h-[220px]">
-          <img src={url} alt={desc} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          <span className="block text-[10px] text-slate-400 text-center py-1.5 bg-slate-50">{desc}</span>
-        </div>
-      );
+  // 1. Handle Markdown Image first: ![desc](url)
+  if (text.includes('![') && text.includes('](')) {
+    const parts = text.split(/(!\[.*?\]\(.*?\))/g);
+    if (parts.length > 1) {
+      return parts.map((part, i) => {
+        const imgMatch = /^!\[(.*?)\]\((.*?)\)$/.exec(part.trim());
+        if (imgMatch) {
+          const desc = imgMatch[1];
+          const url = imgMatch[2];
+          return (
+            <span key={`pub-img-${i}-${url.slice(0, 32)}`} className="my-3.5 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50/80 shadow-xs flex flex-col items-center max-w-full block group relative">
+              <span className="relative w-full flex justify-center bg-slate-100/60 p-2 block">
+                <img 
+                  src={url} 
+                  alt={desc} 
+                  className="max-h-[420px] w-auto max-w-full object-contain rounded-xl shadow-xs transition duration-200 group-hover:scale-[1.01] cursor-pointer" 
+                  referrerPolicy="no-referrer"
+                  onClick={() => onImageZoom && onImageZoom(url, desc)}
+                />
+                {onImageZoom && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onImageZoom(url, desc);
+                    }}
+                    className="absolute top-2.5 right-2.5 px-2 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg opacity-85 group-hover:opacity-100 transition shadow-sm cursor-pointer flex items-center gap-1 text-[10px] font-bold z-10"
+                    title="Nhấn để phóng to ảnh"
+                  >
+                    <ZoomIn size={12} />
+                    <span>Phóng to</span>
+                  </button>
+                )}
+              </span>
+              {desc && desc !== 'Ảnh chụp' && desc !== 'Ảnh dán' && desc !== 'Mô tả ảnh' && (
+                <span className="block text-[10px] text-slate-500 font-medium text-center py-1.5 px-3 bg-white w-full border-t border-slate-100">{desc}</span>
+              )}
+            </span>
+          );
+        }
+        return parsePublicInline(part, onImageZoom);
+      });
     }
   }
   
-  // Parse bold (**text**)
+  // 2. Parse bold (**text**)
   if (/\*\*.*?\*\*/.test(text)) {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={i} className="font-extrabold text-blue-900">{part.slice(2, -2)}</strong>;
       }
-      return parsePublicInline(part);
+      return parsePublicInline(part, onImageZoom);
     });
   }
   
-  // Look for links [text](url)
-  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-  if (text.match(linkRegex)) {
+  // 3. Look for links [text](url)
+  if (text.includes('[') && text.includes('](')) {
     const parts = text.split(/(\[.*?\]\(.*?\))/g);
-    return parts.map((part, i) => {
-      const match = /\[(.*?)\]\((.*?)\)/.exec(part);
-      if (match) {
-        return <a key={i} href={match[2]} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold">{match[1]}</a>;
-      }
-      return part;
-    });
+    if (parts.length > 1) {
+      return parts.map((part, i) => {
+        const match = /^\[(.*?)\]\((.*?)\)$/.exec(part.trim());
+        if (match) {
+          const linkText = match[1];
+          const linkUrl = match[2];
+          if (linkUrl.startsWith('data:image/') || linkUrl.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i)) {
+            return (
+              <span 
+                key={i} 
+                onClick={() => onImageZoom && onImageZoom(linkUrl, linkText)}
+                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                title="Nhấn để xem ảnh"
+              >
+                <ImageIcon size={12} className="inline text-blue-500" />
+                <span>{linkText}</span>
+              </span>
+            );
+          }
+          return <a key={i} href={linkUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold">{linkText}</a>;
+        }
+        return parsePublicInline(part, onImageZoom);
+      });
+    }
   }
 
-  // Parse spans: <span style="color: #ff0000">[text]</span>
+  // 4. Parse spans: <span style="color: #ff0000">[text]</span>
   if (text.includes('<span') && text.includes('</span>')) {
     const parts = text.split(/(<span style=".*?">.*?<\/span>)/g);
     return parts.map((part, i) => {
