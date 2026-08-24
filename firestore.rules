@@ -6,71 +6,95 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Explicit write rules for each collection with basic schema validation to prevent spam & solve security scanner warnings
+    // Allow write and delete operations for app collections
 
     match /users/{userId} {
-      // Users can only be created/modified if they have a non-empty username, password, and role
-      allow write: if request.resource.data.ten != null && 
-                    request.resource.data.ten != "" && 
-                    request.resource.data.matkhau != null && 
-                    request.resource.data.matkhau != "";
+      allow create, update: if request.resource.data.ten != null && 
+                            request.resource.data.ten != "" && 
+                            request.resource.data.matkhau != null && 
+                            request.resource.data.matkhau != "";
+      allow delete: if true;
+    }
+
+    match /settings/{settingId} {
+      allow create, update, delete: if true;
     }
 
     match /globalSettings/{settingId} {
-      // Global settings must contain a valid admin pin
-      allow write: if request.resource.data.adminPin != null && 
-                    request.resource.data.adminPin != "";
+      allow create, update, delete: if true;
+    }
+
+    match /teachers/{teacherId} {
+      allow create, update, delete: if true;
+    }
+
+    match /schoolYears/{yearId} {
+      allow create, update, delete: if true;
+    }
+
+    match /classes/{classId} {
+      allow create, update, delete: if true;
     }
 
     match /students/{studentId} {
-      // Student writes must include a name and class ID
-      allow write: if request.resource.data.name != null && 
-                    request.resource.data.classId != null;
+      allow create, update: if request.resource.data.name != null && 
+                            request.resource.data.classId != null;
+      allow delete: if true;
     }
 
     match /violations/{violationId} {
-      // Violation records must have basic details
-      allow write: if request.resource.data.studentId != null && 
-                    request.resource.data.typeId != null;
+      allow create, update: if request.resource.data.studentId != null && 
+                            request.resource.data.typeId != null;
+      allow delete: if true;
+    }
+
+    match /plans/{planId} {
+      allow create, update, delete: if true;
     }
 
     match /weeklyPlans/{planId} {
-      // Weekly plans must have a title and class ID
-      allow write: if request.resource.data.title != null && 
-                    request.resource.data.classId != null;
+      allow create, update, delete: if true;
     }
 
     match /tasks/{taskId} {
-      allow write: if request.resource.data.title != null;
+      allow create, update: if request.resource.data.title != null;
+      allow delete: if true;
     }
 
     match /violationTypes/{typeId} {
-      allow write: if request.resource.data.name != null;
+      allow create, update: if request.resource.data.name != null;
+      allow delete: if true;
     }
 
     match /academicUpdates/{updateId} {
-      allow write: if request.resource.data.title != null;
+      allow create, update: if request.resource.data.title != null;
+      allow delete: if true;
     }
 
     match /announcements/{annId} {
-      allow write: if request.resource.data.title != null && 
-                    request.resource.data.content != null;
+      allow create, update: if request.resource.data.title != null && 
+                            request.resource.data.content != null;
+      allow delete: if true;
     }
 
     match /duties/{dutyId} {
-      allow write: if request.resource.data.schedule != null;
+      allow create, update, delete: if true;
     }
 
     match /timetables/{timetableId} {
-      allow write: if request.resource.data.cells != null;
+      allow create, update, delete: if true;
     }
 
     match /reminders/{reminderId} {
-      allow write: if request.resource.data.text != null;
+      allow create, update, delete: if true;
     }
 
     match /participations/{participationId} {
-      allow write: if request.resource.data.data != null;
+      allow create, update, delete: if true;
+    }
+
+    match /documentCategories/{categoryId} {
+      allow create, update, delete: if true;
     }
   }
 }
