@@ -637,10 +637,24 @@ export default function App() {
   };
 
   const handleDeleteStudent = (id: string) => {
+    // 1. Delete student record
     setStudents(prev => prev.filter(item => item.id !== id));
-    setViolations(prev => prev.filter(item => item.studentId !== id));
-    setTasks(prev => prev.filter(item => item.studentId !== id));
     dbService.deleteStudent(id);
+
+    // 2. Cascade delete violations belonging to this student (both state and Firestore)
+    const removedViolations = violations.filter(item => item.studentId === id);
+    removedViolations.forEach(v => dbService.deleteViolation(v.id));
+    setViolations(prev => prev.filter(item => item.studentId !== id));
+
+    // 3. Cascade delete tasks assigned specifically to this student
+    const removedTasks = tasks.filter(item => item.studentId === id);
+    removedTasks.forEach(t => dbService.deleteTask(t.id));
+    setTasks(prev => prev.filter(item => item.studentId !== id));
+
+    // 4. Cascade delete academic updates belonging to this student
+    const removedUpdates = academicUpdates.filter(item => item.studentId === id);
+    removedUpdates.forEach(u => dbService.deleteAcademicUpdate(u.id));
+    setAcademicUpdates(prev => prev.filter(item => item.studentId !== id));
   };
 
   const handleAddViolation = (v: ViolationRecord) => {
@@ -789,9 +803,32 @@ export default function App() {
 
   const handleUpdateStudents = (updated: Student[]) => {
     const removed = students.filter(s => !updated.some(u => u.id === s.id));
-    removed.forEach(s => dbService.deleteStudent(s.id));
+    if (removed.length > 0) {
+      const removedIds = removed.map(s => s.id);
+
+      // 1. Delete students from DB
+      removed.forEach(s => dbService.deleteStudent(s.id));
+
+      // 2. Cascade delete violations of removed students
+      const removedViolations = violations.filter(v => removedIds.includes(v.studentId));
+      removedViolations.forEach(v => dbService.deleteViolation(v.id));
+      setViolations(prev => prev.filter(v => !removedIds.includes(v.studentId)));
+
+      // 3. Cascade delete tasks assigned specifically to removed students
+      const removedTasks = tasks.filter(t => removedIds.includes(t.studentId));
+      removedTasks.forEach(t => dbService.deleteTask(t.id));
+      setTasks(prev => prev.filter(t => !removedIds.includes(t.studentId)));
+
+      // 4. Cascade delete academic updates of removed students
+      const removedAcademic = academicUpdates.filter(a => removedIds.includes(a.studentId));
+      removedAcademic.forEach(a => dbService.deleteAcademicUpdate(a.id));
+      setAcademicUpdates(prev => prev.filter(a => !removedIds.includes(a.studentId)));
+    }
+
     setStudents(updated);
-    updated.forEach(s => dbService.saveStudent(s));
+    if (removed.length === 0) {
+      updated.forEach(s => dbService.saveStudent(s));
+    }
   };
 
   const handleUpdateViolations = (updated: ViolationRecord[]) => {
@@ -983,10 +1020,7 @@ export default function App() {
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800">XÁC THỰC QUYỀN HỆ THỐNG</h3>
                 <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl space-y-1">
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Vui lòng nhập Tên tài khoản và Mật khẩu để truy cập trang quản trị.
-                  </p>
-                  <p className="text-[11px] text-blue-600 font-sans font-semibold mt-1">
-                    Tài khoản: <strong className="underline font-bold">admin</strong> | Mật khẩu hiện tại: <strong className="underline font-bold">{(users.find(u => u.ten === 'admin') || initialUsers[0])?.matkhau || '123456'}</strong>
+                    Vui lòng nhập Tên tài khoản và Mật khẩu được cấp để đăng nhập vào trang quản trị.
                   </p>
                 </div>
               </div>
