@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Announcement } from '../types';
 import { db, onSnapshot, collection } from '../lib/firebase';
 import { saveAnnouncement, deleteAnnouncement } from '../lib/dbService';
@@ -25,12 +25,66 @@ import {
   Type,
   Palette,
   Image as ImageIcon,
-  ChevronDown
+  ChevronDown,
+  Upload,
+  Clipboard,
+  Maximize2,
+  ZoomIn,
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 
 interface NewsManagerProps {
   isReadOnly?: boolean;
 }
+
+// Compress and convert image file / blob to optimized base64 data URL
+const processImageFile = async (file: File | Blob, maxWidth = 1600, maxHeight = 2200, quality = 0.92): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (!result) {
+        reject(new Error('Không thể đọc dữ liệu hình ảnh'));
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / maxWidth > height / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(result);
+          return;
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        const isPng = file.type === 'image/png';
+        const dataUrl = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(result);
+      img.src = result;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
 
 const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
   {
@@ -296,7 +350,7 @@ Hy vọng các tổ còn lại sẽ nỗ lực thi đua quyết liệt trong tu�
 };
 
 // Simple Markdown parser to React Elements
-const parseTextToReactElements = (text: string): React.ReactNode => {
+const parseTextToReactElements = (text: string, onImageZoom?: (url: string, title?: string) => void): React.ReactNode => {
   if (!text) return <p className="text-slate-400 italic text-xs">Chưa có nội dung nhập...</p>;
   
   const lines = text.split('\n');
@@ -324,7 +378,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     if (trimmed.startsWith('### ')) {
       elements.push(
         <h3 key={`h3-${index}`} className={`text-sm font-black text-blue-900 mt-4 mb-2 border-b border-slate-100 pb-1 ${currentAlignClass}`}>
-          {parseInlineElements(trimmed.substring(4))}
+          {parseInlineElements(trimmed.substring(4), onImageZoom)}
         </h3>
       );
       return;
@@ -332,7 +386,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     if (trimmed.startsWith('#### ')) {
       elements.push(
         <h4 key={`h4-${index}`} className={`text-xs font-black text-slate-800 mt-3 mb-1.5 ${currentAlignClass}`}>
-          {parseInlineElements(trimmed.substring(5))}
+          {parseInlineElements(trimmed.substring(5), onImageZoom)}
         </h4>
       );
       return;
@@ -345,7 +399,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
       elements.push(
         <div key={`tbl-${index}`} className={`grid grid-cols-3 gap-2 bg-slate-50 p-2 border-b border-slate-100 font-mono text-[10px] text-slate-600 rounded ${currentAlignClass}`}>
           {cols.map((col, cIdx) => (
-            <span key={cIdx} className="font-semibold">{parseInlineElements(col)}</span>
+            <span key={cIdx} className="font-semibold">{parseInlineElements(col, onImageZoom)}</span>
           ))}
         </div>
       );
@@ -356,7 +410,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
       elements.push(
         <li key={`li-${index}`} className={`text-xs text-slate-600 list-disc ml-4 mb-1 leading-relaxed ${currentAlignClass}`}>
-          {parseInlineElements(trimmed.substring(2))}
+          {parseInlineElements(trimmed.substring(2), onImageZoom)}
         </li>
       );
       return;
@@ -367,7 +421,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     if (numMatch) {
       elements.push(
         <li key={`oli-${index}`} className={`text-xs text-slate-600 list-decimal ml-4 mb-1 leading-relaxed ${currentAlignClass}`}>
-          {parseInlineElements(numMatch[1])}
+          {parseInlineElements(numMatch[1], onImageZoom)}
         </li>
       );
       return;
@@ -382,7 +436,7 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
     // Normal paragraph
     elements.push(
       <p key={`p-${index}`} className={`text-xs text-slate-700 leading-relaxed mb-1.5 ${currentAlignClass}`}>
-        {parseInlineElements(trimmed)}
+        {parseInlineElements(trimmed, onImageZoom)}
       </p>
     );
   });
@@ -391,51 +445,95 @@ const parseTextToReactElements = (text: string): React.ReactNode => {
 };
 
 // Sub-parser for inline styles
-const parseInlineElements = (text: string): React.ReactNode => {
+const parseInlineElements = (text: string, onImageZoom?: (url: string, title?: string) => void): React.ReactNode => {
   if (!text) return '';
   
-  // Handle markdown image: ![desc](url)
-  const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
-  const hasImg = text.match(imgRegex);
-  if (hasImg) {
-    const match = imgRegex.exec(text);
-    if (match) {
-      const desc = match[1];
-      const url = match[2];
-      return (
-        <div className="my-3 rounded-xl overflow-hidden border border-slate-200 max-h-[180px]">
-          <img src={url} alt={desc} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          <span className="block text-[9px] text-slate-500 text-center py-1.5 bg-slate-50">{desc}</span>
-        </div>
-      );
+  // 1. Handle Markdown Image first: ![desc](url)
+  if (text.includes('![') && text.includes('](')) {
+    const parts = text.split(/(!\[.*?\]\(.*?\))/g);
+    if (parts.length > 1) {
+      return parts.map((part, i) => {
+        const imgMatch = /^!\[(.*?)\]\((.*?)\)$/.exec(part.trim());
+        if (imgMatch) {
+          const desc = imgMatch[1];
+          const url = imgMatch[2];
+          return (
+            <span key={`img-box-${i}-${url.slice(0, 32)}`} className="my-3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50/80 shadow-xs flex flex-col items-center group relative max-w-full block">
+              <span className="relative w-full flex justify-center bg-slate-100/60 p-2 overflow-hidden block">
+                <img 
+                  src={url} 
+                  alt={desc} 
+                  className="max-h-[420px] w-auto max-w-full object-contain rounded-xl transition duration-200 group-hover:scale-[1.01] cursor-pointer shadow-xs" 
+                  referrerPolicy="no-referrer"
+                  onClick={() => onImageZoom && onImageZoom(url, desc)}
+                />
+                {onImageZoom && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onImageZoom(url, desc);
+                    }}
+                    className="absolute top-2.5 right-2.5 px-2 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg opacity-85 group-hover:opacity-100 transition shadow-sm cursor-pointer flex items-center gap-1 text-[10px] font-bold z-10"
+                    title="Nhấn để xem ảnh phóng to"
+                  >
+                    <ZoomIn size={12} />
+                    <span>Xem lớn</span>
+                  </button>
+                )}
+              </span>
+              {desc && desc !== 'Ảnh chụp' && desc !== 'Ảnh dán' && desc !== 'Mô tả ảnh' && (
+                <span className="block text-[10px] text-slate-500 font-medium text-center py-1.5 px-3 bg-white w-full border-t border-slate-100">{desc}</span>
+              )}
+            </span>
+          );
+        }
+        return parseInlineElements(part, onImageZoom);
+      });
     }
   }
   
-  // Parse bold (**text**)
+  // 2. Parse bold (**text**)
   if (/\*\*.*?\*\*/.test(text)) {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={i} className="font-extrabold text-blue-900">{part.slice(2, -2)}</strong>;
       }
-      return parseInlineElements(part);
+      return parseInlineElements(part, onImageZoom);
     });
   }
   
-  // Look for links [text](url)
-  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-  if (text.match(linkRegex)) {
+  // 3. Look for links [text](url) - (make sure it's not ![])
+  if (text.includes('[') && text.includes('](')) {
     const parts = text.split(/(\[.*?\]\(.*?\))/g);
-    return parts.map((part, i) => {
-      const match = /\[(.*?)\]\((.*?)\)/.exec(part);
-      if (match) {
-        return <a key={i} href={match[2]} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold">{match[1]}</a>;
-      }
-      return part;
-    });
+    if (parts.length > 1) {
+      return parts.map((part, i) => {
+        const match = /^\[(.*?)\]\((.*?)\)$/.exec(part.trim());
+        if (match) {
+          const linkText = match[1];
+          const linkUrl = match[2];
+          if (linkUrl.startsWith('data:image/') || linkUrl.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i)) {
+            return (
+              <span 
+                key={i} 
+                onClick={() => onImageZoom && onImageZoom(linkUrl, linkText)}
+                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer"
+                title="Nhấn để xem ảnh"
+              >
+                <ImageIcon size={12} className="inline text-blue-500" />
+                <span>{linkText}</span>
+              </span>
+            );
+          }
+          return <a key={i} href={linkUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-bold">{linkText}</a>;
+        }
+        return parseInlineElements(part, onImageZoom);
+      });
+    }
   }
 
-  // Parse spans: <span style="color: #ff0000">[text]</span>
+  // 4. Parse spans: <span style="color: #ff0000">[text]</span>
   if (text.includes('<span') && text.includes('</span>')) {
     const parts = text.split(/(<span style=".*?">.*?<\/span>)/g);
     return parts.map((part, i) => {
@@ -483,6 +581,16 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
+
+  // Image insertion and lightbox states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [imageInputMode, setImageInputMode] = useState<'upload' | 'url' | 'clipboard'>('upload');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [zoomImage, setZoomImage] = useState<{ url: string; title?: string } | null>(null);
 
   // Load announcements on mount
   useEffect(() => {
@@ -637,6 +745,150 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
   };
 
   // Helper inserts formatted tags at cursor inside content textarea
+  const insertAtCursor = (insertText: string) => {
+    const textarea = document.getElementById('news-content-textarea') as HTMLTextAreaElement;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end, text.length);
+      
+      const newText = before + insertText + after;
+      setContent(newText);
+      
+      // Return focus and reposition selection cursor
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+      }, 50);
+    } else {
+      setContent(prev => prev + insertText);
+    }
+  };
+
+  // Direct Clipboard Image Paste (Ctrl+V) handler
+  const handleTextareaPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (isReadOnly) return;
+    const items = e.clipboardData?.items;
+    if (!items || items.length === 0) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          try {
+            showStatus('success', '📸 Đang tự động xử lý và mã hóa ảnh dán...');
+            const base64Data = await processImageFile(file);
+            const markdownImg = `\n![Ảnh chụp](${base64Data})\n`;
+            insertAtCursor(markdownImg);
+            showStatus('success', '✅ Đã tự động dán và hiển thị ảnh thành công!');
+          } catch (err) {
+            showStatus('error', 'Lỗi khi xử lý ảnh từ bộ nhớ tạm.');
+          }
+        }
+        return;
+      }
+    }
+  };
+
+  // Drag & Drop Image File handler
+  const handleTextareaDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    if (isReadOnly) return;
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    const fileList: File[] = Array.from(files);
+    const imageFiles = fileList.filter((f: File) => f.type.startsWith('image/'));
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      try {
+        showStatus('success', '📸 Đang mã hóa và chèn ảnh kéo thả...');
+        for (const file of imageFiles) {
+          const base64Data = await processImageFile(file);
+          const desc = file.name.replace(/\.[^/.]+$/, '');
+          const markdownImg = `\n![${desc}](${base64Data})\n`;
+          insertAtCursor(markdownImg);
+        }
+        showStatus('success', '✅ Đã chèn ảnh kéo thả thành công!');
+      } catch (err) {
+        showStatus('error', 'Lỗi khi xử lý ảnh kéo thả.');
+      }
+    }
+  };
+
+  // Handle file input change from modal
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsProcessingImage(true);
+      showStatus('success', 'Đang đọc và mã hóa hình ảnh...');
+      const file = files[0];
+      const base64Data = await processImageFile(file);
+      setImagePreview(base64Data);
+      if (!imageAlt) {
+        setImageAlt(file.name.replace(/\.[^/.]+$/, ''));
+      }
+      showStatus('success', 'Đã tải ảnh thành công! Bạn có thể bấm "Chèn ảnh vào bài viết".');
+    } catch (err) {
+      showStatus('error', 'Lỗi khi đọc file ảnh.');
+    } finally {
+      setIsProcessingImage(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  // Handle paste from clipboard via button in modal
+  const handlePasteFromClipboardButton = async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        showStatus('error', 'Trình duyệt chưa cấp quyền đọc trực tiếp. Bạn chỉ cần nhấn phím Ctrl + V trực tiếp vào ô soạn thảo nhé!');
+        return;
+      }
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          setIsProcessingImage(true);
+          const base64 = await processImageFile(blob);
+          setImagePreview(base64);
+          if (!imageAlt) setImageAlt('Ảnh chụp');
+          setIsProcessingImage(false);
+          showStatus('success', 'Đã nhận ảnh từ bộ nhớ tạm! Bấm "Chèn ảnh vào bài viết" để hoàn tất.');
+          return;
+        }
+      }
+      showStatus('error', 'Không tìm thấy ảnh trong Clipboard. Hãy chụp/copy ảnh rồi nhấn Ctrl + V trực tiếp vào ô soạn thảo.');
+    } catch (err) {
+      showStatus('error', 'Mẹo: Bạn có thể nhấn trực tiếp phím Ctrl + V ngay trong ô soạn thảo văn bản!');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  // Confirm image insertion from modal
+  const handleConfirmInsertImage = () => {
+    const src = imagePreview || imageUrl.trim();
+    if (!src) {
+      showStatus('error', 'Vui lòng chọn ảnh tải lên, dán ảnh từ Clipboard hoặc nhập liên kết ảnh URL.');
+      return;
+    }
+    const desc = imageAlt.trim() || 'Hình ảnh';
+    const markdownImg = `\n![${desc}](${src})\n`;
+    insertAtCursor(markdownImg);
+    setIsImageModalOpen(false);
+    setImagePreview(null);
+    setImageUrl('');
+    setImageAlt('');
+    showStatus('success', '✅ Đã chèn hình ảnh vào bài viết!');
+  };
+
+  // Helper inserts formatted tags at cursor inside content textarea
   const handleToolbarAction = (action: string, value?: string) => {
     if (isReadOnly) return;
     let insertText = '';
@@ -691,31 +943,16 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
         insertText = `<span style="color: ${value}">[Văn bản màu]</span>`;
         break;
       case 'image':
-        insertText = '\n![Mô tả ảnh](https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=800&q=80)\n';
-        break;
+        setIsImageModalOpen(true);
+        setImagePreview(null);
+        setImageUrl('');
+        setImageAlt('');
+        return;
       default:
         break;
     }
 
-    const textarea = document.getElementById('news-content-textarea') as HTMLTextAreaElement;
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = textarea.value;
-      const before = text.substring(0, start);
-      const after = text.substring(end, text.length);
-      
-      const newText = before + insertText + after;
-      setContent(newText);
-      
-      // Return focus and reposition selection cursor
-      setTimeout(() => {
-        textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
-      }, 50);
-    } else {
-      setContent(prev => prev + insertText);
-    }
+    insertAtCursor(insertText);
   };
 
   const getCategoryBadgeClass = (cat: string) => {
@@ -1018,26 +1255,50 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
 
                     <button
                       type="button"
+                      disabled={isReadOnly}
                       onClick={() => handleToolbarAction('image')}
-                      className="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-900 rounded transition flex items-center gap-1 text-[10px] font-bold cursor-pointer"
-                      title="Chèn hình ảnh minh họa"
+                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-md transition flex items-center gap-1.5 text-[10px] font-bold cursor-pointer shadow-xs"
+                      title="Chèn ảnh / Tải ảnh / Dán ảnh chụp màn hình"
                     >
-                      <ImageIcon size={11} />
-                      <span>ẢNH</span>
+                      <ImageIcon size={12} className="text-amber-600" />
+                      <span>ẢNH / DÁN ẢNH</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Main Content input area */}
+                {/* Main Content input area with auto-paste and drag-and-drop */}
                 <textarea
                   id="news-content-textarea"
                   rows={7}
                   disabled={isReadOnly}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Nhập nội dung bài viết tin tức tại đây (sử dụng Markdown hoặc dùng thanh công cụ hỗ trợ)..."
+                  onPaste={handleTextareaPaste}
+                  onDrop={handleTextareaDrop}
+                  placeholder="Nhập nội dung bài viết tin tức tại đây... Bạn có thể nhấn Ctrl + V trực tiếp để dán ảnh chụp màn hình / ảnh copy!"
                   className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none min-h-[140px] leading-relaxed font-mono resize-y pt-2 px-1"
                 />
+
+                {/* Helpful Paste Hint */}
+                <div className="mt-1.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                  <span className="flex items-center gap-1 text-slate-500 font-medium">
+                    <Sparkles size={11} className="text-amber-500 shrink-0" />
+                    <span>Hỗ trợ <strong className="text-blue-700">Ctrl + V</strong> dán ảnh trực tiếp & kéo thả ảnh tự động mã hóa</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsImageModalOpen(true);
+                      setImagePreview(null);
+                      setImageUrl('');
+                      setImageAlt('');
+                    }}
+                    className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Upload size={11} />
+                    <span>Mở hộp thoại ảnh</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1134,8 +1395,8 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
                 <span className="text-[9px] text-slate-400 font-mono font-bold">{date} • {category}</span>
               </div>
               <h3 className="text-sm font-black text-slate-800 leading-relaxed">{title}</h3>
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 max-h-[160px] overflow-y-auto font-sans text-xs">
-                {parseTextToReactElements(content)}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 max-h-[220px] overflow-y-auto font-sans text-xs">
+                {parseTextToReactElements(content, (url, t) => setZoomImage({ url, title: t }))}
               </div>
             </div>
           )}
@@ -1202,8 +1463,8 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
                     </div>
 
                     {ann.content && (
-                      <div className="bg-slate-50 p-3 rounded-xl text-[11px] border border-slate-200 text-slate-700 max-h-[120px] overflow-y-auto">
-                        {parseTextToReactElements(ann.content)}
+                      <div className="bg-slate-50 p-3 rounded-xl text-[11px] border border-slate-200 text-slate-700 max-h-[140px] overflow-y-auto">
+                        {parseTextToReactElements(ann.content, (url, t) => setZoomImage({ url, title: t }))}
                       </div>
                     )}
                   </div>
@@ -1213,6 +1474,266 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
           </div>
         </div>
       </div>
+
+      {/* Hidden File Input for Image Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
+
+      {/* MODAL: CHÈN HÌNH ẢNH / DÁN ẢNH / TẢI ẢNH */}
+      {isImageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                  <ImageIcon size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Chèn hình ảnh vào bài viết</h3>
+                  <p className="text-[10px] text-slate-400">Tải tệp từ máy, dán ảnh chụp màn hình (Ctrl+V) hoặc nhập URL</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Tabs */}
+            <div className="px-6 pt-4 pb-2 border-b border-slate-100 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setImageInputMode('upload')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  imageInputMode === 'upload'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Upload size={13} />
+                <span>Tải ảnh từ máy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageInputMode('clipboard')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  imageInputMode === 'clipboard'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Clipboard size={13} />
+                <span>Dán từ Clipboard (Ctrl+V)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageInputMode('url')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  imageInputMode === 'url'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <LinkIcon size={13} />
+                <span>Liên kết URL Web</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4">
+              {/* Tab 1: Upload from local computer */}
+              {imageInputMode === 'upload' && (
+                <div className="space-y-3">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = e.dataTransfer.files;
+                      if (files && files.length > 0) {
+                        const file = files[0];
+                        if (file.type.startsWith('image/')) {
+                          setIsProcessingImage(true);
+                          processImageFile(file).then((base64) => {
+                            setImagePreview(base64);
+                            if (!imageAlt) setImageAlt(file.name.replace(/\.[^/.]+$/, ''));
+                            setIsProcessingImage(false);
+                          }).catch(() => setIsProcessingImage(false));
+                        }
+                      }
+                    }}
+                    className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-blue-50/30 transition group"
+                  >
+                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                      <Upload size={20} />
+                    </div>
+                    <p className="text-xs font-black text-slate-700">Nhấn để chọn ảnh từ máy tính</p>
+                    <p className="text-[10px] text-slate-400 mt-1">hoặc kéo thả ảnh trực tiếp vào đây (Hỗ trợ JPG, PNG, GIF, WebP...)</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Paste from clipboard */}
+              {imageInputMode === 'clipboard' && (
+                <div className="space-y-3">
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200/80 space-y-2 text-xs text-amber-900">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-600" />
+                      Cách 1: Nhấn phím tắt trực tiếp
+                    </p>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Bạn có thể copy ảnh ở bất cứ đâu (chụp màn hình bằng <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px] font-bold">Win + Shift + S</kbd> hoặc chuột phải copy ảnh), sau đó nhấn <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px] font-bold">Ctrl + V</kbd> ngay trong ô soạn thảo để chèn ảnh tức thì!
+                    </p>
+                  </div>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={handlePasteFromClipboardButton}
+                      disabled={isProcessingImage}
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
+                    >
+                      <Clipboard size={14} />
+                      <span>{isProcessingImage ? 'Đang đọc Clipboard...' : 'Đọc ảnh từ bộ nhớ tạm (Clipboard)'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: URL input */}
+              {imageInputMode === 'url' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Đường dẫn URL hình ảnh:
+                    </label>
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => {
+                        setImageUrl(e.target.value);
+                        setImagePreview(e.target.value);
+                      }}
+                      placeholder="https://example.com/hinh-anh.jpg"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Caption / Description input */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Mô tả / Chú thích ảnh (tùy chọn):
+                </label>
+                <input
+                  type="text"
+                  value={imageAlt}
+                  onChange={(e) => setImageAlt(e.target.value)}
+                  placeholder="Ví dụ: Ảnh lễ bế giảng, Bảng điểm tổng kết, Danh sách phân công..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Image Preview Box */}
+              {imagePreview && (
+                <div className="space-y-1.5 pt-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-700 flex items-center gap-1">
+                      <CheckCircle2 size={13} className="text-emerald-500" />
+                      Xem trước ảnh đã mã hóa:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageUrl('');
+                      }}
+                      className="text-rose-500 hover:text-rose-700 text-[10px] font-bold cursor-pointer"
+                    >
+                      Xóa ảnh này
+                    </button>
+                  </div>
+                  <div className="p-2 bg-slate-100 rounded-2xl border border-slate-200 flex justify-center max-h-[180px] overflow-hidden">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-h-[160px] object-contain rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmInsertImage}
+                disabled={!imagePreview && !imageUrl.trim()}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-black tracking-wide shadow-md transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Check size={14} />
+                <span>Chèn ảnh vào bài viết</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN LIGHTBOX IMAGE MODAL */}
+      {zoomImage && (
+        <div 
+          onClick={() => setZoomImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn cursor-zoom-out"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col cursor-default"
+          >
+            {/* Lightbox Header */}
+            <div className="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-white">
+              <span className="text-xs font-bold text-slate-300 truncate max-w-md">
+                {zoomImage.title || 'Xem ảnh phóng to'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoomImage(null)}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Đóng xem ảnh"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            {/* Lightbox Image */}
+            <div className="p-3 bg-black flex items-center justify-center overflow-auto max-h-[80vh]">
+              <img
+                src={zoomImage.url}
+                alt={zoomImage.title || 'Phóng to'}
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
