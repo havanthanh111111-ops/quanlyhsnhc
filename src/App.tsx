@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser } from './types';
-import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers } from './data/initialData';
+import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser, DocumentCategory } from './types';
+import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers, initialDocumentCategories } from './data/initialData';
 import StudentManager from './components/StudentManager';
 import DiligenceManager from './components/DiligenceManager';
 import WeeklyPlanner from './components/WeeklyPlanner';
@@ -15,6 +15,7 @@ import SystemSettings from './components/SystemSettings';
 import ClassManager from './components/ClassManager';
 import PublicPortal from './components/PublicPortal';
 import NewsManager from './components/NewsManager';
+import DocumentManager from './components/DocumentManager';
 
 // Firebase Database imports
 import { db, onSnapshot, collection } from './lib/firebase';
@@ -39,7 +40,8 @@ import {
   HelpCircle,
   Grid,
   Lock,
-  Unlock
+  Unlock,
+  FolderArchive
 } from 'lucide-react';
 
 // Relational Migration Utility
@@ -187,7 +189,7 @@ const migrateToRelational = (
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'diligence' | 'academic' | 'class' | 'plans' | 'tasks' | 'settings' | 'news'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'diligence' | 'academic' | 'class' | 'plans' | 'tasks' | 'settings' | 'news' | 'documents'>('overview');
 
   // Load and Migrate on mount
   const migrationResult = (() => {
@@ -292,6 +294,11 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<SystemUser | null>(() => {
     const saved = localStorage.getItem('app_current_user');
     return saved ? JSON.parse(saved) : null;
+  });
+
+  const [documentCategories, setDocumentCategories] = useState<DocumentCategory[]>(() => {
+    const saved = localStorage.getItem('app_document_categories');
+    return saved ? JSON.parse(saved) : initialDocumentCategories;
   });
 
   const [viewMode, setViewMode] = useState<'public' | 'admin'>('public');
@@ -477,6 +484,21 @@ export default function App() {
         });
         unsubscribes.push(unsubUsers);
 
+        // Subscribe to DocumentCategories
+        const unsubDocCats = onSnapshot(collection(db, 'documentCategories'), (snap) => {
+          handleFirstConnection();
+          const list: DocumentCategory[] = [];
+          snap.forEach(doc => list.push(doc.data() as DocumentCategory));
+          if (list.length > 0) {
+            list.sort((a, b) => (a.order || 0) - (b.order || 0));
+            setDocumentCategories(list);
+          }
+        }, (err) => {
+          console.error('Lỗi subscription documentCategories:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
+        });
+        unsubscribes.push(unsubDocCats);
+
         // Subscribe to Global Settings
         const unsubSettings = onSnapshot(collection(db, 'settings'), (snap) => {
           handleFirstConnection();
@@ -610,6 +632,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('app_academic_updates', JSON.stringify(academicUpdates));
   }, [academicUpdates]);
+
+  useEffect(() => {
+    localStorage.setItem('app_document_categories', JSON.stringify(documentCategories));
+  }, [documentCategories]);
 
   useEffect(() => {
     localStorage.setItem('app_active_year_id_relational', activeSchoolYearId);
@@ -893,6 +919,33 @@ export default function App() {
     await dbService.deleteUser(userId);
   };
 
+  const handleAddDocCategory = async (category: DocumentCategory) => {
+    setDocumentCategories(prev => {
+      const updated = [...prev, category];
+      localStorage.setItem('app_document_categories', JSON.stringify(updated));
+      return updated;
+    });
+    await dbService.saveDocumentCategory(category);
+  };
+
+  const handleUpdateDocCategory = async (category: DocumentCategory) => {
+    setDocumentCategories(prev => {
+      const updated = prev.map(c => c.id === category.id ? category : c);
+      localStorage.setItem('app_document_categories', JSON.stringify(updated));
+      return updated;
+    });
+    await dbService.saveDocumentCategory(category);
+  };
+
+  const handleDeleteDocCategory = async (categoryId: string) => {
+    setDocumentCategories(prev => {
+      const updated = prev.filter(c => c.id !== categoryId);
+      localStorage.setItem('app_document_categories', JSON.stringify(updated));
+      return updated;
+    });
+    await dbService.deleteDocumentCategory(categoryId);
+  };
+
   // Filter data by currently active Class (relational classId matching)
   const filteredStudents = students.filter(s => s.classId === activeClassId);
 
@@ -935,6 +988,7 @@ export default function App() {
       case 'academic': return 'Học tập & Rèn Luyện';
       case 'class': return 'Quản lý';
       case 'news': return 'Tin tức / Thông báo';
+      case 'documents': return 'Văn bản cần';
       case 'plans': return 'Kế hoạch';
       case 'tasks': return 'Nhiệm vụ';
       case 'settings': return 'Quản lý chung';
@@ -950,6 +1004,7 @@ export default function App() {
       case 'academic': return '& Kết quả';
       case 'class': return 'Lớp học';
       case 'news': return 'Cổng thông tin';
+      case 'documents': return '& Lưu trữ';
       case 'plans': return 'Giảng dạy';
       case 'tasks': return '& Báo cáo';
       case 'settings': return '& Cài đặt hệ thống';
@@ -993,6 +1048,7 @@ export default function App() {
           tasks={tasks}
           teachers={teachers}
           academicUpdates={academicUpdates}
+          documentCategories={documentCategories}
           onOpenAdmin={() => {
             if (currentUser) {
               setViewMode('admin');
@@ -1274,6 +1330,27 @@ export default function App() {
                 </div>
                 {isTabFrozen('news') && <Lock size={12} className="text-slate-400" />}
               </button>
+
+              <button
+                id="nav-tab-documents"
+                disabled={isTabFrozen('documents')}
+                onClick={() => {
+                  if (!isTabFrozen('documents')) setActiveTab('documents');
+                }}
+                className={`w-full p-2 rounded-xl flex items-center justify-between transition text-xs font-medium border text-left ${
+                  isTabFrozen('documents')
+                    ? 'border-transparent text-slate-300 cursor-not-allowed opacity-40 bg-transparent'
+                    : activeTab === 'documents'
+                      ? 'bg-amber-50 border-amber-200/80 text-amber-900 shadow-sm font-bold'
+                      : 'border-transparent text-slate-600 hover:text-slate-950 hover:bg-slate-50 font-bold'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'documents' ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
+                  <span className="text-amber-950 tracking-wide uppercase">&lt;VĂN BẢN CẦN&gt;</span>
+                </div>
+                {isTabFrozen('documents') && <Lock size={12} className="text-slate-400" />}
+              </button>
             </div>
           </div>
 
@@ -1425,6 +1502,7 @@ export default function App() {
               { id: 'diligence', label: 'HS: Vi phạm' },
               { id: 'class', label: 'Lớp: Quản lý' },
               { id: 'news', label: 'Lớp: Tin tức' },
+              { id: 'documents', label: '<Văn bản cần>', isTeacherOnly: true },
               { id: 'plans', label: 'GV: Kế hoạch', isTeacherOnly: true },
               { id: 'tasks', label: 'GV: Nhiệm vụ', isTeacherOnly: true },
               { id: 'settings', label: 'GV: Quản lý', isTeacherOnly: true }
@@ -1725,6 +1803,19 @@ export default function App() {
             {activeTab === 'news' && (
               <NewsManager
                 isReadOnly={isReadOnly}
+              />
+            )}
+
+            {activeTab === 'documents' && (
+              <DocumentManager
+                schoolYears={schoolYears}
+                documentCategories={documentCategories}
+                onAddCategory={handleAddDocCategory}
+                onUpdateCategory={handleUpdateDocCategory}
+                onDeleteCategory={handleDeleteDocCategory}
+                activeSchoolYearId={activeSchoolYearId}
+                isReadOnly={isReadOnly}
+                currentUser={currentUser}
               />
             )}
 
