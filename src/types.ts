@@ -133,4 +133,23 @@ export interface SystemUser {
   quyen: 'caocap' | 'hotro'; // Quyền hạn: caocap hoặc hotro
 }
 
+export interface ArchivedDocItem {
+  id: string;
+  title: string; // Tiêu đề con (vd: MỘT SỐ QUY ĐỊNH CHUNG_NH2026-2027, ĐIỂM THI ĐUA)
+  url: string; // Link chia sẻ Google (Google Drive, Docs, Sheets, PDF, v.v.)
+  visibility: 'public' | 'admin_only'; // 'public': Hiển thị web công khai, 'admin_only': Ẩn (chỉ admin xem được)
+  description?: string; // Ghi chú hoặc mô tả ngắn
+  createdAt?: string; // Ngày tạo (YYYY-MM-DD)
+}
+
+export interface DocumentCategory {
+  id: string;
+  schoolYearId: string; // Niên học (id năm học)
+  title: string; // Tiêu đề cha (vd: QUY ĐỊNH NỀ NẾP, KẾ HOẠCH NĂM HỌC, VĂN BẢN CHUYÊN MÔN)
+  order?: number; // Thứ tự hiển thị
+  items: ArchivedDocItem[]; // Danh sách các tiêu đề con
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
