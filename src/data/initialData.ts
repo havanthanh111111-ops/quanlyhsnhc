@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Student, ViolationRecord, WeeklyPlan, StudentTask, SystemUser } from '../types';
+import { Student, ViolationRecord, WeeklyPlan, StudentTask, SystemUser, DocumentCategory } from '../types';
 
 export const initialStudents: Student[] = [
   {
@@ -364,6 +364,81 @@ export const initialUsers: SystemUser[] = [
     ten: 'hotro',
     matkhau: '123456',
     quyen: 'hotro'
+  }
+];
+
+export const initialDocumentCategories: DocumentCategory[] = [
+  {
+    id: 'CAT_01',
+    schoolYearId: 'NH03', // 2026-2027
+    title: 'QUY ĐỊNH NỀ NẾP',
+    order: 1,
+    items: [
+      {
+        id: 'DOC_01_01',
+        title: 'MỘT SỐ QUY ĐỊNH CHUNG_NH2026-2027',
+        url: 'https://docs.google.com/document/d/1sample-quy-dinh-chung/preview',
+        visibility: 'public',
+        description: 'Văn bản quy định khung nề nếp, nội quy trường lớp năm học 2026-2027',
+        createdAt: '2026-08-15'
+      },
+      {
+        id: 'DOC_01_02',
+        title: 'ĐIỂM THI ĐUA & TIÊU CHUẨN XẾP LOẠI',
+        url: 'https://docs.google.com/spreadsheets/d/1sample-diem-thi-dua/preview',
+        visibility: 'public',
+        description: 'Bảng quy chuẩn điểm trừ và xếp loại thi đua hàng tuần cho học sinh',
+        createdAt: '2026-08-20'
+      },
+      {
+        id: 'DOC_01_03',
+        title: 'HƯỚNG DẪN XỬ LÝ KỶ LUẬT ĐẶC BIỆT (NỘI BỘ BGH & GVCN)',
+        url: 'https://docs.google.com/document/d/1sample-ky-luat-noi-bo/preview',
+        visibility: 'admin_only',
+        description: 'Quy trình tiếp nhận và xử lý vi phạm nghiêm trọng (Chỉ dành cho GVCN)',
+        createdAt: '2026-08-22'
+      }
+    ]
+  },
+  {
+    id: 'CAT_02',
+    schoolYearId: 'NH03', // 2026-2027
+    title: 'KẾ HOẠCH & ĐỀ CƯƠNG CHUYÊN MÔN',
+    order: 2,
+    items: [
+      {
+        id: 'DOC_02_01',
+        title: 'KẾ HOẠCH HOẠT ĐỘNG NGOẠI KHÓA TOÀN TRƯỜNG NH2026-2027',
+        url: 'https://docs.google.com/document/d/1sample-ngoai-khoa/preview',
+        visibility: 'public',
+        description: 'Kế hoạch tổ chức các hoạt động trải nghiệm, dã ngoại và hội thi sáng tạo',
+        createdAt: '2026-08-21'
+      },
+      {
+        id: 'DOC_02_02',
+        title: 'MẪU BÁO CÁO TỔNG KẾT THÁNG CỦA GVCN (NỘI BỘ)',
+        url: 'https://docs.google.com/document/d/1sample-mau-bao-cao/preview',
+        visibility: 'admin_only',
+        description: 'Biểu mẫu nộp báo cáo tổng kết tình hình lớp chủ nhiệm cuối tháng',
+        createdAt: '2026-08-23'
+      }
+    ]
+  },
+  {
+    id: 'CAT_03',
+    schoolYearId: 'NH02', // 2025-2026
+    title: 'QUY ĐỊNH NỀ NẾP & HỌC VỤ 2025-2026',
+    order: 1,
+    items: [
+      {
+        id: 'DOC_03_01',
+        title: 'QUY ĐỊNH ĐỒNG PHỤC VÀ TÁC PHONG_NH2025-2026',
+        url: 'https://docs.google.com/document/d/1sample-dong-phuc/preview',
+        visibility: 'public',
+        description: 'Quy chuẩn trang phục học sinh THPT Nguyễn Hữu Cầu',
+        createdAt: '2025-09-05'
+      }
+    ]
   }
 ];
 
