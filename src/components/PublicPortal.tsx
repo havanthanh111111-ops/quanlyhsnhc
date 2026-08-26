@@ -3516,7 +3516,7 @@ export default function PublicPortal({
 
               {/* Albums Content & Filter */}
               {(() => {
-                const effectiveAlbums = (propAlbums && propAlbums.length > 0) ? propAlbums : initialAlbums;
+                const effectiveAlbums = (propAlbums && propAlbums.length > 0) ? propAlbums : (initialAlbums || []);
                 const publishedAlbums = effectiveAlbums.filter(a => a.isPublished !== false);
 
                 // Available categories
