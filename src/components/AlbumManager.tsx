@@ -32,6 +32,7 @@ import {
 import { PhotoAlbum, AlbumPhoto, SchoolYear, SystemUser } from '../types';
 import { AlbumSlideshowModal } from './AlbumSlideshowModal';
 import { CustomConfirmModal } from './CustomConfirmModal';
+import { normalizeImageUrl, isGooglePhotosSharePage } from '../lib/imageUtils';
 
 interface AlbumManagerProps {
   schoolYears: SchoolYear[];
@@ -226,14 +227,15 @@ export default function AlbumManager({
 
   const handleSavePhotoItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!photoUrlInput.trim()) {
+    const cleanUrl = normalizeImageUrl(photoUrlInput.trim());
+    if (!cleanUrl) {
       alert('Vui lòng nhập đường dẫn (Hyperlink) hình ảnh!');
       return;
     }
 
     const photoObj: AlbumPhoto = {
       id: editingPhotoIndex !== null ? formPhotos[editingPhotoIndex].id : `PHOTO_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      url: photoUrlInput.trim(),
+      url: cleanUrl,
       caption: photoCaptionInput.trim(),
       title: photoTitleInput.trim() || undefined,
       link: photoLinkInput.trim() || undefined,
@@ -250,7 +252,7 @@ export default function AlbumManager({
 
     // Auto set cover URL if empty
     if (!formCoverUrl) {
-      setFormCoverUrl(photoUrlInput.trim());
+      setFormCoverUrl(cleanUrl);
     }
 
     setIsPhotoModalOpen(false);
@@ -273,7 +275,7 @@ export default function AlbumManager({
   };
 
   const handleSetCoverPhoto = (url: string) => {
-    setFormCoverUrl(url);
+    setFormCoverUrl(normalizeImageUrl(url));
   };
 
   // Batch add photos parser
@@ -285,7 +287,8 @@ export default function AlbumManager({
     lines.forEach((line, idx) => {
       // Split by | or tab
       const parts = line.includes('|') ? line.split('|') : [line];
-      const url = parts[0]?.trim();
+      const rawUrl = parts[0]?.trim();
+      const url = normalizeImageUrl(rawUrl);
       const caption = parts[1]?.trim() || `Hình ảnh hoạt động ${formPhotos.length + idx + 1}`;
       const title = parts[2]?.trim() || undefined;
 
@@ -495,8 +498,9 @@ export default function AlbumManager({
                 {/* Album Cover Thumbnail */}
                 <div className="relative aspect-[16/10] bg-slate-100 overflow-hidden">
                   <img
-                    src={coverImage}
+                    src={normalizeImageUrl(coverImage)}
                     alt={album.title}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 pointer-events-none"></div>
@@ -732,7 +736,12 @@ export default function AlbumManager({
                     />
                     {formCoverUrl && (
                       <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-300 shrink-0">
-                        <img src={formCoverUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                        <img 
+                          src={normalizeImageUrl(formCoverUrl)} 
+                          alt="Cover Preview" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                     )}
                   </div>
@@ -815,7 +824,12 @@ export default function AlbumManager({
                       >
                         {/* Thumbnail */}
                         <div className="w-16 h-12 rounded-xl overflow-hidden border border-slate-300 bg-slate-200 shrink-0 relative">
-                          <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                          <img 
+                            src={normalizeImageUrl(photo.url)} 
+                            alt="" 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover" 
+                          />
                           <div className="absolute bottom-0 right-0 px-1 bg-black/70 text-[8px] font-mono text-white font-bold">
                             #{idx + 1}
                           </div>
@@ -948,17 +962,40 @@ export default function AlbumManager({
                   required
                   value={photoUrlInput}
                   onChange={(e) => setPhotoUrlInput(e.target.value)}
-                  placeholder="https://images.unsplash.com/... hoặc link Google Drive, Imgur"
+                  placeholder="Dán link Google Drive, Google Ảnh (lh3), Unsplash, Imgur..."
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
+                
+                {/* Google Photos Warning & Helper Guide */}
+                {isGooglePhotosSharePage(photoUrlInput) && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] leading-relaxed space-y-1.5 animate-fadeIn">
+                    <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                      <HelpCircle size={14} className="text-amber-600 shrink-0" />
+                      Lưu ý khi dùng Google Photos (Google Ảnh):
+                    </p>
+                    <p>
+                      Link bạn vừa dán là <strong>link chia sẻ trang web</strong> (photos.app.goo.gl), trình duyệt không thể tải trực tiếp trang web vào thẻ ảnh.
+                    </p>
+                    <div className="bg-amber-100/70 p-2 rounded-lg text-amber-950 font-medium space-y-1">
+                      <p className="font-bold">👉 Cách lấy link ảnh trực tiếp từ Google Photos:</p>
+                      <p>1. Mở bức ảnh trên Google Photos máy tính.</p>
+                      <p>2. <strong>Nhấp chuột phải vào ảnh</strong> &rarr; Chọn <strong>"Sao chép địa chỉ hình ảnh"</strong> (Copy image address).</p>
+                      <p>3. Dán link vừa sao chép (bắt đầu bằng <em>https://lh3.googleusercontent.com/...</em>) vào ô trên.</p>
+                    </div>
+                    <p className="text-[10px] text-amber-700">
+                      💡 Hoặc bạn có thể tải ảnh lên <strong>Google Drive</strong>, bật quyền "Bất kỳ ai có đường liên kết" rồi dán link Google Drive (hệ thống tự động chuyển đổi hiển thị 100%).
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Live Preview */}
               {photoUrlInput && (
                 <div className="relative aspect-video bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 flex items-center justify-center">
                   <img
-                    src={photoUrlInput}
+                    src={normalizeImageUrl(photoUrlInput)}
                     alt="Preview"
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       (e.target as any).src = 'https://via.placeholder.com/600x400?text=Link+Anh+Khong+Hop+Le';
