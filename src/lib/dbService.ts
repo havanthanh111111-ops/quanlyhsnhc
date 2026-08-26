@@ -21,7 +21,8 @@ import {
   SheetSyncConfig,
   SystemUser,
   Announcement,
-  DocumentCategory
+  DocumentCategory,
+  PhotoAlbum
 } from '../types';
 
 // Helper to check if a collection is empty
@@ -237,3 +238,21 @@ export async function saveDocumentCategory(item: DocumentCategory) {
 export async function deleteDocumentCategory(id: string) {
   await deleteDoc(doc(db, 'documentCategories', id));
 }
+
+export async function saveAlbum(item: PhotoAlbum) {
+  await setDoc(doc(db, 'albums', item.id), item);
+}
+
+export async function deleteAlbum(id: string) {
+  await deleteDoc(doc(db, 'albums', id));
+}
+
+export async function saveAlbums(items: PhotoAlbum[]) {
+  const batch = writeBatch(db);
+  for (const item of items) {
+    const docRef = doc(db, 'albums', item.id);
+    batch.set(docRef, item);
+  }
+  await batch.commit();
+}
+
