@@ -37,7 +37,10 @@ import {
   Globe,
   Link as LinkIcon,
   ZoomIn,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Images,
+  Play,
+  Camera
 } from 'lucide-react';
 import { 
   Student, 
@@ -48,8 +51,11 @@ import {
   AcademicUpdate,
   Teacher,
   SchoolYear,
-  DocumentCategory
+  DocumentCategory,
+  PhotoAlbum
 } from '../types';
+import { initialAlbums } from '../data/initialData';
+import AlbumSlideshowModal from './AlbumSlideshowModal';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
 import { 
   BarChart, 
@@ -85,6 +91,7 @@ interface PublicPortalProps {
   teachers: Teacher[];
   academicUpdates: AcademicUpdate[];
   documentCategories?: DocumentCategory[];
+  albums?: PhotoAlbum[];
   onOpenAdmin: () => void;
   initialSchoolYearId?: string;
 }
@@ -99,15 +106,23 @@ export default function PublicPortal({
   teachers,
   academicUpdates: allAcademicUpdates,
   documentCategories: allDocCategories = [],
+  albums: propAlbums = [],
   onOpenAdmin,
   initialSchoolYearId
 }: PublicPortalProps) {
   // Navigation states
-  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'contact' | 'news' | 'archive'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'contact' | 'news' | 'archive' | 'albums'>('home');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [newsCategoryFilter, setNewsCategoryFilter] = useState<string>('Tất cả');
   const [activeNewsId, setActiveNewsId] = useState<string | null>(null);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState<string>('');
+
+  // Album state
+  const [albumCategoryFilter, setAlbumCategoryFilter] = useState<string>('Tất cả');
+  const [albumSearchQuery, setAlbumSearchQuery] = useState<string>('');
+  const [activeSlideshowAlbum, setActiveSlideshowAlbum] = useState<PhotoAlbum | null>(null);
+  const [slideshowInitialIndex, setSlideshowInitialIndex] = useState<number>(0);
+  const [slideshowAutoPlay, setSlideshowAutoPlay] = useState<boolean>(true);
 
   // School Year filter state
   const [selectedSchoolYearId, setSelectedSchoolYearId] = useState<string>(
@@ -885,6 +900,7 @@ export default function PublicPortal({
               { id: 'stats', label: 'THỐNG KÊ & BIỂU ĐỒ' },
               { id: 'timetable', label: 'HOẠT ĐỘNG' },
               { id: 'archive', label: 'VĂN BẢN' },
+              { id: 'albums', label: 'ALBUM ẢNH' },
               { id: 'news', label: 'TIN TỨC' },
               { id: 'contact', label: 'LIÊN HỆ PHẢN HỒI' }
             ].map(item => {
@@ -3456,6 +3472,239 @@ export default function PublicPortal({
             </div>
           )}
 
+          {/* TAB CONTENT: ALBUM ẢNH (BỘ SƯU TẬP & CÂU CHUYỆN BẰNG HÌNH) */}
+          {activeTab === 'albums' && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Header Banner - Bright, High-Contrast & Festive */}
+              <div className="bg-gradient-to-r from-blue-50 via-indigo-50/70 to-slate-50 border border-blue-200/90 rounded-3xl p-6 md:p-7 shadow-xs relative overflow-hidden">
+                <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-black uppercase tracking-wider shadow-2xs">
+                      <Images size={13} className="text-amber-300" />
+                      <span>GÓC KỶ NIỆM & KHOẢNH KHẮC NGUYỄN HỮU CẦU</span>
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-black tracking-tight text-blue-950 uppercase font-sans">
+                      ALBUM ẢNH & NHỮNG CÂU CHUYỆN BẰNG HÌNH
+                    </h2>
+                    <p className="text-slate-600 text-xs font-medium max-w-2xl leading-relaxed">
+                      Lưu giữ những khoảnh khắc đẹp nhất về nề nếp thi đua, hoạt động học tập, ngày hội STEM, hội trại truyền thống và tình bạn tuổi học trò.
+                    </p>
+                  </div>
+
+                  {/* Search Bar within Album */}
+                  <div className="relative min-w-[260px] md:w-80 self-start md:self-center shrink-0">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm album ảnh, sự kiện..."
+                      value={albumSearchQuery}
+                      onChange={(e) => setAlbumSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-300 hover:border-blue-400 focus:border-blue-600 rounded-2xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-2xs font-medium"
+                    />
+                    {albumSearchQuery && (
+                      <button
+                        onClick={() => setAlbumSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer transition"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Albums Content & Filter */}
+              {(() => {
+                const effectiveAlbums = (propAlbums && propAlbums.length > 0) ? propAlbums : initialAlbums;
+                const publishedAlbums = effectiveAlbums.filter(a => a.isPublished !== false);
+
+                // Available categories
+                const categories = ['Tất cả', ...Array.from(new Set(publishedAlbums.map(a => a.category).filter(Boolean)))];
+
+                // Filter by category & search query
+                const filteredAlbums = publishedAlbums.filter(a => {
+                  const matchCat = albumCategoryFilter === 'Tất cả' || a.category === albumCategoryFilter;
+                  const matchQuery = !albumSearchQuery.trim() || 
+                    a.title.toLowerCase().includes(albumSearchQuery.toLowerCase()) || 
+                    (a.description && a.description.toLowerCase().includes(albumSearchQuery.toLowerCase())) ||
+                    a.photos.some(p => (p.title && p.title.toLowerCase().includes(albumSearchQuery.toLowerCase())) || (p.caption && p.caption.toLowerCase().includes(albumSearchQuery.toLowerCase())));
+                  return matchCat && matchQuery;
+                });
+
+                return (
+                  <div className="space-y-6">
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                      {categories.map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setAlbumCategoryFilter(cat)}
+                          className={`px-4 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                            albumCategoryFilter === cat
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Album Grid */}
+                    {filteredAlbums.length === 0 ? (
+                      <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center text-slate-400 space-y-3">
+                        <Images size={36} className="mx-auto text-slate-300" />
+                        <p className="text-sm font-bold text-slate-600">Chưa có album ảnh nào phù hợp với tìm kiếm.</p>
+                        <p className="text-xs text-slate-400">Hãy thử chọn danh mục khác hoặc xóa bộ lọc tìm kiếm.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredAlbums.map((album) => {
+                          const cover = album.coverUrl || album.photos[0]?.url || 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=600&auto=format&fit=crop';
+                          const photoCount = album.photos ? album.photos.length : 0;
+                          
+                          return (
+                            <div 
+                              key={album.id}
+                              className="bg-white border border-slate-200 hover:border-blue-300 rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition duration-200 flex flex-col group"
+                            >
+                              {/* Album Thumbnail Cover */}
+                              <div 
+                                onClick={() => {
+                                  setActiveSlideshowAlbum(album);
+                                  setSlideshowInitialIndex(0);
+                                  setSlideshowAutoPlay(true);
+                                }}
+                                className="relative aspect-video w-full overflow-hidden bg-slate-100 cursor-pointer"
+                              >
+                                <img 
+                                  src={cover} 
+                                  alt={album.title}
+                                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition" />
+                                
+                                {/* Photo Count Badge */}
+                                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-xs text-white text-[11px] font-black px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                                  <Camera size={12} className="text-amber-400" />
+                                  <span>{photoCount} ảnh</span>
+                                </div>
+
+                                {/* Slideshow Play Icon Overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition duration-200">
+                                  <div className="w-12 h-12 rounded-full bg-blue-600/90 text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition">
+                                    <Play size={20} className="ml-0.5 fill-white" />
+                                  </div>
+                                </div>
+
+                                {album.featured && (
+                                  <div className="absolute top-3 right-3 bg-amber-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                    <Sparkles size={11} /> Nổi bật
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Album Info */}
+                              <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                    <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">{album.category || 'Hoạt động'}</span>
+                                    <span>•</span>
+                                    <span>{album.createdAt}</span>
+                                  </div>
+                                  
+                                  <h3 
+                                    onClick={() => {
+                                      setActiveSlideshowAlbum(album);
+                                      setSlideshowInitialIndex(0);
+                                      setSlideshowAutoPlay(false);
+                                    }}
+                                    className="text-sm font-black text-slate-900 group-hover:text-blue-600 transition leading-snug cursor-pointer line-clamp-2"
+                                  >
+                                    {album.title}
+                                  </h3>
+
+                                  {album.description && (
+                                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed font-medium">
+                                      {album.description}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Thumbnail Strip Preview (up to 4 small thumbnails) */}
+                                {album.photos && album.photos.length > 1 && (
+                                  <div className="pt-2 border-t border-slate-100">
+                                    <div className="grid grid-cols-4 gap-1.5">
+                                      {album.photos.slice(0, 4).map((p, idx) => (
+                                        <button
+                                          key={p.id || idx}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveSlideshowAlbum(album);
+                                            setSlideshowInitialIndex(idx);
+                                            setSlideshowAutoPlay(false);
+                                          }}
+                                          className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-blue-500 transition group/thumb cursor-pointer"
+                                          title={p.title || `Xem ảnh ${idx + 1}`}
+                                        >
+                                          <img 
+                                            src={p.url} 
+                                            alt={p.title || ''} 
+                                            className="w-full h-full object-cover group-hover/thumb:scale-110 transition duration-200"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          {idx === 3 && album.photos.length > 4 && (
+                                            <div className="absolute inset-0 bg-black/60 text-white text-[10px] font-black flex items-center justify-center">
+                                              +{album.photos.length - 4}
+                                            </div>
+                                          )}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setActiveSlideshowAlbum(album);
+                                      setSlideshowInitialIndex(0);
+                                      setSlideshowAutoPlay(true);
+                                    }}
+                                    className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black tracking-wide transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                                  >
+                                    <Play size={13} className="fill-white" />
+                                    <span>Trình Chiếu</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      setActiveSlideshowAlbum(album);
+                                      setSlideshowInitialIndex(0);
+                                      setSlideshowAutoPlay(false);
+                                    }}
+                                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Xem tất cả ảnh trong album"
+                                  >
+                                    <Images size={13} />
+                                    <span>Xem ảnh</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* TAB CONTENT: CONTACT */}
           {activeTab === 'contact' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
@@ -3717,6 +3966,16 @@ export default function PublicPortal({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 8. ALBUM SLIDESHOW & FULLSCREEN GALLERY MODAL */}
+      {activeSlideshowAlbum && (
+        <AlbumSlideshowModal
+          album={activeSlideshowAlbum}
+          onClose={() => setActiveSlideshowAlbum(null)}
+          initialIndex={slideshowInitialIndex}
+          autoPlayInitial={slideshowAutoPlay}
+        />
       )}
 
     </div>
