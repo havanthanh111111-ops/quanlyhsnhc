@@ -311,20 +311,20 @@ export default function DocumentManager({
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
-      {/* 1. HEADER BANNER */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* 1. HEADER BANNER - BRIGHT, ELEGANT & HIGH CONTRAST */}
+      <div className="bg-gradient-to-r from-blue-50 via-indigo-50/80 to-white rounded-3xl p-6 border border-blue-200/90 shadow-sm relative overflow-hidden text-slate-800">
+        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-800/60 border border-blue-400/30 text-amber-300 text-xs font-bold uppercase tracking-wider">
-              <FolderArchive size={14} className="text-amber-400" />
-              <span>HỆ THỐNG QUẢN LÝ VĂN BẢN CẦN & KHO TÀI LIỆU</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold uppercase tracking-wider shadow-2xs">
+              <FolderArchive size={14} className="text-amber-300" />
+              <span>HỆ THỐNG QUẢN LÝ VĂN BẢN & BIỂU MẪU</span>
             </div>
-            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white uppercase font-sans">
-              DANH MỤC VĂN BẢN & LƯU TRỮ
+            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-blue-950 uppercase font-sans">
+              DANH MỤC VĂN BẢN & QUY ĐỊNH
             </h2>
-            <p className="text-slate-300 text-xs md:text-sm font-medium max-w-2xl leading-relaxed">
-              Phân loại tài liệu theo <span className="text-amber-300 font-bold">Niên học</span>, cấu trúc <span className="text-amber-300 font-bold">Tiêu đề cha</span> và các <span className="text-amber-300 font-bold">Tiêu đề con</span> liên kết trực tiếp tới file Google Drive, Google Docs, Sheets. Thiết lập quyền hiển thị trên <span className="text-emerald-400 font-bold">Web Công Khai</span> hoặc <span className="text-rose-300 font-bold">Chỉ Admin/Giáo viên</span> xem được.
+            <p className="text-slate-600 text-xs md:text-sm font-medium max-w-2xl leading-relaxed">
+              Phân loại tài liệu theo <span className="text-blue-700 font-bold">Niên học</span>, cấu trúc <span className="text-blue-700 font-bold">Tiêu đề cha</span> và các <span className="text-blue-700 font-bold">Văn bản con</span> liên kết trực tiếp tới file Google Drive, Google Docs, Sheets. Thiết lập quyền hiển thị trên <span className="text-emerald-700 font-bold">Web Công Khai</span> hoặc <span className="text-rose-700 font-bold">Chỉ Admin/Giáo viên</span> xem được.
             </p>
           </div>
 
@@ -333,7 +333,7 @@ export default function DocumentManager({
               <button
                 id="btn-add-category-main"
                 onClick={() => handleOpenCategoryModal()}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 <Plus size={16} /> + Thêm Tiêu Đề Cha
               </button>
@@ -342,22 +342,22 @@ export default function DocumentManager({
         </div>
 
         {/* Quick KPI Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-blue-800/60">
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Tiêu đề cha (Chủ đề)</span>
-            <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">{stats.totalCats}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-blue-200/80">
+          <div className="bg-white/80 border border-blue-100 rounded-2xl p-3 shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Tiêu đề cha (Chủ đề)</span>
+            <span className="text-xl font-black text-blue-700 font-mono mt-0.5 block">{stats.totalCats}</span>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Tổng văn bản con</span>
-            <span className="text-xl font-black text-white font-mono mt-0.5 block">{stats.totalItems}</span>
+          <div className="bg-white/80 border border-blue-100 rounded-2xl p-3 shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Tổng văn bản con</span>
+            <span className="text-xl font-black text-slate-900 font-mono mt-0.5 block">{stats.totalItems}</span>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
-            <span className="text-[10px] uppercase font-bold text-emerald-300 tracking-wider block">Hiển thị Web Công</span>
-            <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">{stats.publicCount}</span>
+          <div className="bg-white/80 border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider block">Hiển thị Web Công</span>
+            <span className="text-xl font-black text-emerald-600 font-mono mt-0.5 block">{stats.publicCount}</span>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-3">
-            <span className="text-[10px] uppercase font-bold text-rose-300 tracking-wider block">Ẩn / Chỉ Admin</span>
-            <span className="text-xl font-black text-rose-400 font-mono mt-0.5 block">{stats.adminOnlyCount}</span>
+          <div className="bg-white/80 border border-rose-100 rounded-2xl p-3 shadow-2xs">
+            <span className="text-[10px] uppercase font-bold text-rose-600 tracking-wider block">Ẩn / Chỉ Admin</span>
+            <span className="text-xl font-black text-rose-600 font-mono mt-0.5 block">{stats.adminOnlyCount}</span>
           </div>
         </div>
       </div>
