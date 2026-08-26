@@ -23,6 +23,7 @@ import {
   Layers
 } from 'lucide-react';
 import { PhotoAlbum, AlbumPhoto } from '../types';
+import { normalizeImageUrl } from '../lib/imageUtils';
 
 interface AlbumSlideshowModalProps {
   album: PhotoAlbum;
@@ -275,8 +276,9 @@ export const AlbumSlideshowModal: React.FC<AlbumSlideshowModalProps> = ({
                 </div>
               )}
               <img
-                src={currentPhoto?.url}
+                src={normalizeImageUrl(currentPhoto?.url)}
                 alt={currentPhoto?.title || currentPhoto?.caption || `Ảnh ${currentIndex + 1}`}
+                referrerPolicy="no-referrer"
                 onLoad={() => setImageLoaded(true)}
                 className={`max-h-[52vh] sm:max-h-[58vh] max-w-[92vw] object-contain rounded-2xl shadow-2xl border border-slate-800 transition-opacity duration-300 ${
                   imageLoaded ? 'opacity-100' : 'opacity-0'
@@ -357,8 +359,9 @@ export const AlbumSlideshowModal: React.FC<AlbumSlideshowModalProps> = ({
                     }`}
                   >
                     <img 
-                      src={photo.url} 
+                      src={normalizeImageUrl(photo.url)} 
                       alt="" 
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover" 
                     />
                     <div className="absolute bottom-0 right-0 px-1 bg-black/70 text-[8px] font-mono font-bold text-white rounded-tl">
@@ -393,8 +396,9 @@ export const AlbumSlideshowModal: React.FC<AlbumSlideshowModalProps> = ({
                 >
                   <div className="relative aspect-video bg-slate-950 overflow-hidden">
                     <img 
-                      src={photo.url} 
+                      src={normalizeImageUrl(photo.url)} 
                       alt={photo.title || `Ảnh ${idx + 1}`}
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/70 backdrop-blur-xs text-white text-[10px] font-mono font-bold rounded-md">
