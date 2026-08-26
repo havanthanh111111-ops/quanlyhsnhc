@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Student, StudentTask } from '../types';
+import { normalizeImageUrl } from '../lib/imageUtils';
 import { db, onSnapshot, doc, setDoc, deleteDoc } from '../lib/firebase';
 import { saveTimetable, saveReminder, deleteReminder, saveParticipation, saveDuty } from '../lib/dbService';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
@@ -35,11 +36,7 @@ import {
 } from 'lucide-react';
 
 const getStudentAvatarUrl = (avatarUrl: string | undefined): string => {
-  if (!avatarUrl) return '';
-  if (avatarUrl.startsWith('data:image/') || avatarUrl.startsWith('blob:') || (avatarUrl.startsWith('http') && !avatarUrl.includes('drive.google.com'))) {
-    return avatarUrl;
-  }
-  return avatarUrl.replace('/view?usp=drivesdk', '').replace('file/d/', 'uc?export=view&id=');
+  return normalizeImageUrl(avatarUrl);
 };
 
 interface ClassManagerProps {
