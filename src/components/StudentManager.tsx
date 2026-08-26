@@ -11,24 +11,10 @@ import StudentAcademicTracker from './StudentAcademicTracker';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { getAccessToken, googleSignIn } from '../services/authService';
+import { normalizeImageUrl } from '../lib/imageUtils';
 
 const getDriveImageUrl = (urlOrId: string | undefined): string => {
-  if (!urlOrId) return '';
-  if (urlOrId.startsWith('data:image/') || urlOrId.startsWith('blob:') || (urlOrId.startsWith('http') && !urlOrId.includes('drive.google.com'))) {
-    return urlOrId;
-  }
-  if (urlOrId.includes('lh3.googleusercontent.com') || urlOrId.includes('drive.google.com/thumbnail')) {
-    return urlOrId;
-  }
-  let fileId = urlOrId;
-  const matchD = urlOrId.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  const matchId = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (matchD) {
-    fileId = matchD[1];
-  } else if (matchId) {
-    fileId = matchId[1];
-  }
-  return `https://lh3.googleusercontent.com/d/${fileId}`;
+  return normalizeImageUrl(urlOrId);
 };
 
 const getResolution = (type: string): string => {
