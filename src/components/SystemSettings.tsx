@@ -1883,7 +1883,13 @@ export default function SystemSettings({
               </div>
               <div className="bg-blue-500/5 border border-blue-200 rounded-xl p-4 text-xs text-blue-800 leading-relaxed space-y-2">
                 <p>🙋‍♂️ Bạn đang đăng nhập bằng tài khoản hỗ trợ: <strong className="font-bold uppercase text-blue-900">{currentUser?.ten}</strong></p>
-                <p className="text-slate-600 text-[11px]">Tài khoản hỗ trợ không tự ý thay đổi mật khẩu. Nếu cần cấp đổi mật khẩu hoặc cập nhật quyền hạn, vui lòng liên hệ quản trị viên chính thức (admin caocap).</p>
+                <div className="text-[11px] text-slate-700 space-y-1 bg-white/60 p-2.5 rounded-lg border border-blue-100">
+                  <p className="font-bold text-blue-900">✨ Phạm vi quyền hạn tài khoản hỗ trợ:</p>
+                  <p>• Quản lý Lớp học & Danh mục</p>
+                  <p>• Đăng bài, cập nhật Tin tức & Thông báo</p>
+                  <p>• Quản lý Album Ảnh & Đăng ảnh câu chuyện bằng hình</p>
+                </div>
+                <p className="text-slate-500 text-[10px]">Tài khoản hỗ trợ không tự ý thay đổi mật khẩu hoặc sửa nề nếp học sinh. Nếu cần cấp đổi mật khẩu, vui lòng liên hệ quản trị viên chính thức (admin caocap).</p>
               </div>
             </div>
           )}
@@ -1897,7 +1903,7 @@ export default function SystemSettings({
                 </div>
                 <div>
                   <h4 className="text-sm font-extrabold text-slate-900">Quản Lý Tài Khoản Hỗ Trợ</h4>
-                  <p className="text-[10px] text-slate-500 font-medium">Tạo mới hoặc xóa bỏ tài khoản phụ cho nhân viên hỗ trợ (hotro)</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Tạo mới hoặc xóa tài khoản phụ (thao tác Lớp học, Tin tức & Album Ảnh)</p>
                 </div>
               </div>
 
