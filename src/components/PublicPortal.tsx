@@ -57,6 +57,7 @@ import {
 import { initialAlbums } from '../data/initialData';
 import AlbumSlideshowModal from './AlbumSlideshowModal';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
+import { normalizeImageUrl } from '../lib/imageUtils';
 import { 
   BarChart, 
   Bar, 
@@ -74,11 +75,7 @@ import {
 } from 'recharts';
 
 const getStudentAvatarUrl = (avatarUrl: string | undefined): string => {
-  if (!avatarUrl) return '';
-  if (avatarUrl.startsWith('data:image/') || avatarUrl.startsWith('blob:') || (avatarUrl.startsWith('http') && !avatarUrl.includes('drive.google.com'))) {
-    return avatarUrl;
-  }
-  return avatarUrl.replace('/view?usp=drivesdk', '').replace('file/d/', 'uc?export=view&id=');
+  return normalizeImageUrl(avatarUrl);
 };
 
 interface PublicPortalProps {
@@ -3561,7 +3558,7 @@ export default function PublicPortal({
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredAlbums.map((album) => {
-                          const cover = album.coverUrl || album.photos[0]?.url || 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=600&auto=format&fit=crop';
+                          const cover = normalizeImageUrl(album.coverUrl || album.photos[0]?.url || 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=600&auto=format&fit=crop');
                           const photoCount = album.photos ? album.photos.length : 0;
                           
                           return (
@@ -3650,7 +3647,7 @@ export default function PublicPortal({
                                           title={p.title || `Xem ảnh ${idx + 1}`}
                                         >
                                           <img 
-                                            src={p.url} 
+                                            src={normalizeImageUrl(p.url)} 
                                             alt={p.title || ''} 
                                             className="w-full h-full object-cover group-hover/thumb:scale-110 transition duration-200"
                                             referrerPolicy="no-referrer"
@@ -3959,8 +3956,9 @@ export default function PublicPortal({
             {/* Lightbox Image Container */}
             <div className="p-3 bg-black flex items-center justify-center overflow-auto max-h-[80vh]">
               <img
-                src={zoomImage.url}
+                src={normalizeImageUrl(zoomImage.url)}
                 alt={zoomImage.title || 'Phóng to'}
+                referrerPolicy="no-referrer"
                 className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg"
               />
             </div>
@@ -4093,11 +4091,11 @@ const parsePublicInline = (text: string, onImageZoom?: (url: string, title?: str
             <span key={`pub-img-${i}-${url.slice(0, 32)}`} className="my-3.5 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50/80 shadow-xs flex flex-col items-center max-w-full block group relative">
               <span className="relative w-full flex justify-center bg-slate-100/60 p-2 block">
                 <img 
-                  src={url} 
+                  src={normalizeImageUrl(url)} 
                   alt={desc} 
                   className="max-h-[420px] w-auto max-w-full object-contain rounded-xl shadow-xs transition duration-200 group-hover:scale-[1.01] cursor-pointer" 
                   referrerPolicy="no-referrer"
-                  onClick={() => onImageZoom && onImageZoom(url, desc)}
+                  onClick={() => onImageZoom && onImageZoom(normalizeImageUrl(url), desc)}
                 />
                 {onImageZoom && (
                   <button
