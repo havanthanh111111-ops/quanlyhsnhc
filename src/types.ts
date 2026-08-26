@@ -152,4 +152,28 @@ export interface DocumentCategory {
   updatedAt?: string;
 }
 
+export interface AlbumPhoto {
+  id: string;
+  url: string; // Hyperlink ảnh (URL ảnh, Google Drive UC link, Imgur, Cloudinary, v.v.)
+  caption: string; // Chú thích cho bức ảnh (câu chuyện, mô tả chi tiết)
+  title?: string; // Tiêu đề ngắn của bức ảnh nếu có
+  order?: number; // Thứ tự trong slide show
+  link?: string; // Hyperlink liên kết ngoài mở rộng khi click
+}
+
+export interface PhotoAlbum {
+  id: string;
+  title: string; // Tên Album / Tiêu đề câu chuyện bằng hình
+  description?: string; // Lời dẫn / Tóm tắt câu chuyện
+  category: string; // Thể loại: Hoạt động trường, Phong trào Đoàn, Học tập & STEM, Tri ân & Kỷ niệm, Ngoại khóa, v.v.
+  schoolYearId?: string; // Niên học (hoặc 'all')
+  coverUrl?: string; // Ảnh bìa album
+  photos: AlbumPhoto[]; // Danh sách các tấm hình trong album
+  createdAt: string; // Ngày tạo (YYYY-MM-DD)
+  updatedAt?: string;
+  isPublished?: boolean; // Hiển thị trên Web công khai
+  featured?: boolean; // Đặt làm nổi bật
+}
+
+
 
