@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Student, ViolationRecord, WeeklyPlan, StudentTask, SystemUser, DocumentCategory } from '../types';
+import { Student, ViolationRecord, WeeklyPlan, StudentTask, SystemUser, DocumentCategory, PhotoAlbum } from '../types';
 
 export const initialStudents: Student[] = [
   {
@@ -441,5 +441,145 @@ export const initialDocumentCategories: DocumentCategory[] = [
     ]
   }
 ];
+
+export const initialAlbums: PhotoAlbum[] = [
+  {
+    id: 'ALBUM_01',
+    title: 'Lễ Khai Giảng Năm Học Mới - Khát Vọng Tri Thức & Sáng Tạo',
+    description: 'Chùm ảnh ghi lại không khí hân hoan rực rỡ cờ hoa trong ngày hội toàn dân đưa trẻ đến trường tại mái trường THPT Nguyễn Hữu Cầu.',
+    category: 'Hoạt động trường',
+    schoolYearId: 'NH03', // 2026-2027
+    coverUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=1200&auto=format&fit=crop',
+    createdAt: '2026-09-05',
+    isPublished: true,
+    featured: true,
+    photos: [
+      {
+        id: 'PHOTO_01_01',
+        url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=1200&auto=format&fit=crop',
+        title: 'Toàn cảnh Lễ Khai giảng',
+        caption: 'Toàn thể cán bộ giáo viên và học sinh trường THPT Nguyễn Hữu Cầu trang nghiêm trong nghi thức Chào cờ khai giảng năm học mới.',
+        order: 1
+      },
+      {
+        id: 'PHOTO_01_02',
+        url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=1200&auto=format&fit=crop',
+        title: 'Tiếng trống trường rộn rã',
+        caption: 'Thầy Hiệu trưởng đánh hồi trống khai trường mở đầu cho một năm học mới đầy ắp niềm tin, hy vọng và quyết tâm bứt phá.',
+        order: 2
+      },
+      {
+        id: 'PHOTO_01_03',
+        url: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?q=80&w=1200&auto=format&fit=crop',
+        title: 'Nụ cười rạng rỡ của học sinh lớp 10',
+        caption: 'Những gương mặt học sinh tân khóa 10 rạng ngời niềm vui, chính thức bước chân vào ngôi nhà chung Nguyễn Hữu Cầu giàu truyền thống.',
+        order: 3
+      },
+      {
+        id: 'PHOTO_01_04',
+        url: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1200&auto=format&fit=crop',
+        title: 'Vinh danh giáo viên xuất sắc',
+        caption: 'Ban Giám hiệu nhà trường trao tặng hoa và phần thưởng chúc mừng các thầy cô giáo đạt thành tích xuất sắc trong công tác bồi dưỡng học sinh giỏi.',
+        order: 4
+      }
+    ]
+  },
+  {
+    id: 'ALBUM_02',
+    title: 'Hội Trại Truyền Thống 26/3 - Nhiệt Huyết Tuổi Trẻ Đoàn Trường',
+    description: 'Hành trình trải nghiệm sôi động với chuỗi hoạt động giao lưu cắm trại, đồng diễn flashmob, trò chơi vận động và đêm nhạc hội kết đoàn.',
+    category: 'Phong trào Đoàn',
+    schoolYearId: 'NH03',
+    coverUrl: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?q=80&w=1200&auto=format&fit=crop',
+    createdAt: '2026-03-26',
+    isPublished: true,
+    featured: true,
+    photos: [
+      {
+        id: 'PHOTO_02_01',
+        url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?q=80&w=1200&auto=format&fit=crop',
+        title: 'Cổng trại sáng tạo các chi đoàn',
+        caption: 'Các chi đoàn lớp trổ tài thiết kế cổng trại tái chế xanh với chủ đề "Khát vọng vươn tầm và bảo vệ môi trường biển đảo quê hương".',
+        order: 1
+      },
+      {
+        id: 'PHOTO_02_02',
+        url: 'https://images.unsplash.com/photo-1526976668912-1a811878dd37?q=80&w=1200&auto=format&fit=crop',
+        title: 'Hội thi Trò chơi Dân gian & Kéo co',
+        caption: 'Tinh thần đoàn kết nảy lửa trong trận chung kết kéo co giữa các khối lớp, tiếng reo hò cổ vũ vang dội khắp sân trường.',
+        order: 2
+      },
+      {
+        id: 'PHOTO_02_03',
+        url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=1200&auto=format&fit=crop',
+        title: 'Đêm Lửa Trại Kết Đoàn Lung Linh',
+        caption: 'Ánh lửa trại bùng cháy giữa đêm hội kết đoàn, các đoàn viên thanh niên tay nắm chặt tay hát vang bài ca truyền thống Đoàn.',
+        order: 3
+      }
+    ]
+  },
+  {
+    id: 'ALBUM_03',
+    title: 'Ngày Hội STEM & Khát Vọng Sáng Tạo Khoa Học Kỹ Thuật',
+    description: 'Nơi ươm mầm các ý tưởng khoa học độc đáo từ học sinh: robot tự động, tên lửa nước, mô hình công nghệ xanh và trí tuệ nhân tạo.',
+    category: 'Học tập & STEM',
+    schoolYearId: 'NH03',
+    coverUrl: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?q=80&w=1200&auto=format&fit=crop',
+    createdAt: '2026-04-18',
+    isPublished: true,
+    featured: false,
+    photos: [
+      {
+        id: 'PHOTO_03_01',
+        url: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?q=80&w=1200&auto=format&fit=crop',
+        title: 'Gian hàng Trưng bày Dự án Khoa học',
+        caption: 'Học sinh câu lạc bộ Khoa học tự hào thuyết trình mô hình lọc nước thông minh sử dụng năng lượng mặt trời trước hội đồng thẩm định.',
+        order: 1
+      },
+      {
+        id: 'PHOTO_03_02',
+        url: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=1200&auto=format&fit=crop',
+        title: 'Thực hành Lập trình & Điều khiển Robot',
+        caption: 'Các bạn học sinh cùng nhau kiểm tra thuật toán tránh vật cản cho robot mini trên sa bàn thi đấu.',
+        order: 2
+      },
+      {
+        id: 'PHOTO_03_03',
+        url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?q=80&w=1200&auto=format&fit=crop',
+        title: 'Trải nghiệm Hóa học Vui',
+        caption: 'Tiết học trải nghiệm thực tế với các thí nghiệm biến đổi màu sắc kỳ thú, khơi dậy niềm đam mê nghiên cứu khoa học tự nhiên.',
+        order: 3
+      }
+    ]
+  },
+  {
+    id: 'ALBUM_04',
+    title: 'Chiến Dịch Tình Nguyện Hoa Phượng Đỏ & Vì Cộng Đồng',
+    description: 'Những bước chân tình nguyện vì an sinh xã hội, thắp sáng ước mơ cho các em nhỏ khó khăn và chung tay bảo vệ môi trường.',
+    category: 'Phong trào Đoàn',
+    schoolYearId: 'NH02', // 2025-2026
+    coverUrl: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1200&auto=format&fit=crop',
+    createdAt: '2026-06-28',
+    isPublished: true,
+    featured: false,
+    photos: [
+      {
+        id: 'PHOTO_04_01',
+        url: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1200&auto=format&fit=crop',
+        title: 'Lễ Xuất quân Chiến dịch Hoa Phượng Đỏ',
+        caption: 'Chiến sĩ tình nguyện sẵn sàng lên đường thực hiện các phần việc ý nghĩa vì cộng đồng trên địa bàn quận và các huyện ngoại thành.',
+        order: 1
+      },
+      {
+        id: 'PHOTO_04_02',
+        url: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=1200&auto=format&fit=crop',
+        title: 'Dạy học hè cho thiếu nhi vùng ven',
+        caption: 'Lớp học tình thương ấm áp tiếng cười do các bạn đoàn viên trường trực tiếp đứng lớp ôn tập toán và tiếng Anh hè.',
+        order: 2
+      }
+    ]
+  }
+];
+
 
 
