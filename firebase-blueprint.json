@@ -33,6 +33,9 @@
     },
     "documentCategories": {
       "description": "Kho văn bản, lưu trữ tài liệu phân cấp theo niên học, tiêu đề cha và tiêu đề con (Google Drive link, công khai / chỉ admin)"
+    },
+    "albums": {
+      "description": "Album ảnh và những câu chuyện bằng hình (chùm ảnh, chú thích, hyperlink ảnh, trình chiếu slide show)"
     }
   }
 }

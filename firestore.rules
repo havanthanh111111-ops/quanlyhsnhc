@@ -96,5 +96,9 @@ service cloud.firestore {
     match /documentCategories/{categoryId} {
       allow create, update, delete: if true;
     }
+
+    match /albums/{albumId} {
+      allow create, update, delete: if true;
+    }
   }
 }
