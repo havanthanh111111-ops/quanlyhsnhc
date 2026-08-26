@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Announcement } from '../types';
 import { db, onSnapshot, collection } from '../lib/firebase';
 import { saveAnnouncement, deleteAnnouncement } from '../lib/dbService';
+import { CustomConfirmModal } from './CustomConfirmModal';
 import { 
   Megaphone, 
   Plus, 
@@ -581,6 +582,11 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string; title: string }>({
+    isOpen: false,
+    id: '',
+    title: ''
+  });
 
   // Image insertion and lightbox states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -726,11 +732,21 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
     setDate(`${day}/${month}/${year}`);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, annTitle?: string) => {
     if (isReadOnly) return;
-    if (window.confirm('Bạn có chắc chắn muốn xóa tin tức này không? Tin tức sẽ lập tức gỡ khỏi Web Công khai.')) {
-      deleteAnnouncement(id);
-      const filtered = announcements.filter(ann => ann.id !== id);
+    setDeleteConfirm({
+      isOpen: true,
+      id,
+      title: annTitle || 'tin tức này'
+    });
+  };
+
+  const handleConfirmDeleteNews = () => {
+    const idToDelete = deleteConfirm.id;
+    setDeleteConfirm({ isOpen: false, id: '', title: '' });
+    if (idToDelete) {
+      deleteAnnouncement(idToDelete);
+      const filtered = announcements.filter(ann => ann.id !== idToDelete);
       saveToStorage(filtered);
       showStatus('success', 'Đã xóa và đồng bộ gỡ tin tức khỏi Web Công khai!');
     }
@@ -1452,7 +1468,7 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
                             <Edit2 size={12} />
                           </button>
                           <button
-                            onClick={() => handleDelete(ann.id)}
+                            onClick={() => handleDelete(ann.id, ann.title)}
                             title="Xóa tin tức"
                             className="p-1.5 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-500 rounded-lg transition cursor-pointer"
                           >
@@ -1734,6 +1750,18 @@ export default function NewsManager({ isReadOnly = false }: NewsManagerProps) {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <CustomConfirmModal
+        isOpen={deleteConfirm.isOpen}
+        title="Xác nhận xóa tin tức"
+        message={`Bạn có chắc chắn muốn xóa tin tức "${deleteConfirm.title}" không? Tin tức sẽ lập tức được gỡ khỏi Web Công khai.`}
+        confirmLabel="Xóa tin tức"
+        cancelLabel="Hủy bỏ"
+        type="danger"
+        onConfirm={handleConfirmDeleteNews}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: '', title: '' })}
+      />
     </div>
   );
 }

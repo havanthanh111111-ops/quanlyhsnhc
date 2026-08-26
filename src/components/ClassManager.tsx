@@ -2275,8 +2275,13 @@ export default function ClassManager({
                 {confirmModal.cancelText || 'Hủy bỏ'}
               </button>
               <button
-                onClick={confirmModal.onConfirm}
-                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition shadow-md ${
+                type="button"
+                onClick={() => {
+                  const action = confirmModal.onConfirm;
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  if (action) action();
+                }}
+                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition shadow-md cursor-pointer ${
                   confirmModal.type === 'danger' 
                     ? 'bg-rose-600 hover:bg-rose-500 text-white' 
                     : 'bg-amber-600 hover:bg-amber-500 text-black'

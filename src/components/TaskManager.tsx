@@ -1092,7 +1092,13 @@ export default function TaskManager({
         title={confirmModal?.title || ''}
         message={confirmModal?.message || ''}
         type="danger"
-        onConfirm={() => confirmModal?.onConfirm()}
+        onConfirm={() => {
+          const action = confirmModal?.onConfirm;
+          setConfirmModal(null);
+          if (action) {
+            action();
+          }
+        }}
         onCancel={() => setConfirmModal(null)}
       />
     </div>

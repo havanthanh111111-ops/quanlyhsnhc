@@ -278,20 +278,25 @@ export default function DocumentManager({
 
   // Handle Confirm Delete
   const handleConfirmDelete = async () => {
-    if (deleteConfirm.type === 'category') {
-      await onDeleteCategory(deleteConfirm.categoryId);
-    } else if (deleteConfirm.type === 'item' && deleteConfirm.itemId) {
-      const cat = documentCategories.find(c => c.id === deleteConfirm.categoryId);
-      if (cat) {
-        const updatedItems = cat.items.filter(it => it.id !== deleteConfirm.itemId);
-        await onUpdateCategory({
-          ...cat,
-          items: updatedItems,
-          updatedAt: new Date().toISOString()
-        });
-      }
-    }
+    const target = { ...deleteConfirm };
     setDeleteConfirm({ isOpen: false, type: 'category', categoryId: '', title: '' });
+    try {
+      if (target.type === 'category') {
+        await onDeleteCategory(target.categoryId);
+      } else if (target.type === 'item' && target.itemId) {
+        const cat = documentCategories.find(c => c.id === target.categoryId);
+        if (cat) {
+          const updatedItems = cat.items.filter(it => it.id !== target.itemId);
+          await onUpdateCategory({
+            ...cat,
+            items: updatedItems,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khi xóa tài liệu:', err);
+    }
   };
 
   // Handle Copy Link

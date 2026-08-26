@@ -1100,8 +1100,15 @@ export default function AlbumManager({
         cancelLabel="HỦY"
         type="danger"
         onConfirm={async () => {
-          await onDeleteAlbum(deleteConfirm.albumId);
+          const id = deleteConfirm.albumId;
           setDeleteConfirm({ isOpen: false, albumId: '', title: '' });
+          if (id) {
+            try {
+              await onDeleteAlbum(id);
+            } catch (err) {
+              console.error('Lỗi khi xóa album:', err);
+            }
+          }
         }}
         onCancel={() => setDeleteConfirm({ isOpen: false, albumId: '', title: '' })}
       />
