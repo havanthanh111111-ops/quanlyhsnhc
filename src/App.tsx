@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser, DocumentCategory } from './types';
-import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers, initialDocumentCategories } from './data/initialData';
+import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser, DocumentCategory, PhotoAlbum } from './types';
+import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers, initialDocumentCategories, initialAlbums } from './data/initialData';
 import StudentManager from './components/StudentManager';
 import DiligenceManager from './components/DiligenceManager';
 import WeeklyPlanner from './components/WeeklyPlanner';
@@ -16,6 +16,7 @@ import ClassManager from './components/ClassManager';
 import PublicPortal from './components/PublicPortal';
 import NewsManager from './components/NewsManager';
 import DocumentManager from './components/DocumentManager';
+import AlbumManager from './components/AlbumManager';
 
 // Firebase Database imports
 import { db, onSnapshot, collection } from './lib/firebase';
@@ -32,16 +33,17 @@ import {
   Settings, 
   Sparkles, 
   BookOpen, 
-  Search,
-  UserCheck,
-  AlertTriangle,
-  LogOut,
-  RefreshCw,
-  HelpCircle,
-  Grid,
-  Lock,
-  Unlock,
-  FolderArchive
+  Search, 
+  UserCheck, 
+  AlertTriangle, 
+  LogOut, 
+  RefreshCw, 
+  HelpCircle, 
+  Grid, 
+  Lock, 
+  Unlock, 
+  FolderArchive,
+  Images
 } from 'lucide-react';
 
 // Relational Migration Utility
@@ -301,6 +303,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialDocumentCategories;
   });
 
+  const [albums, setAlbums] = useState<PhotoAlbum[]>(() => {
+    const saved = localStorage.getItem('app_albums');
+    return saved ? JSON.parse(saved) : initialAlbums;
+  });
+
   const [viewMode, setViewMode] = useState<'public' | 'admin'>('public');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [loginUsername, setLoginUsername] = useState('');
@@ -498,6 +505,22 @@ export default function App() {
           if (!hasConnected) setDbError(err?.message || String(err));
         });
         unsubscribes.push(unsubDocCats);
+
+        // Subscribe to Albums
+        const unsubAlbums = onSnapshot(collection(db, 'albums'), (snap) => {
+          handleFirstConnection();
+          const list: PhotoAlbum[] = [];
+          snap.forEach(doc => list.push(doc.data() as PhotoAlbum));
+          if (list.length > 0) {
+            list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+            setAlbums(list);
+            localStorage.setItem('app_albums', JSON.stringify(list));
+          }
+        }, (err) => {
+          console.error('Lỗi subscription albums:', err);
+          if (!hasConnected) setDbError(err?.message || String(err));
+        });
+        unsubscribes.push(unsubAlbums);
 
         // Subscribe to Global Settings
         const unsubSettings = onSnapshot(collection(db, 'settings'), (snap) => {
@@ -946,6 +969,27 @@ export default function App() {
     await dbService.deleteDocumentCategory(categoryId);
   };
 
+  const handleAddAlbum = async (newAlbum: PhotoAlbum) => {
+    const updated = [newAlbum, ...albums.filter(a => a.id !== newAlbum.id)];
+    setAlbums(updated);
+    localStorage.setItem('app_albums', JSON.stringify(updated));
+    await dbService.saveAlbum(newAlbum);
+  };
+
+  const handleUpdateAlbum = async (updatedAlbum: PhotoAlbum) => {
+    const updated = albums.map(a => a.id === updatedAlbum.id ? updatedAlbum : a);
+    setAlbums(updated);
+    localStorage.setItem('app_albums', JSON.stringify(updated));
+    await dbService.saveAlbum(updatedAlbum);
+  };
+
+  const handleDeleteAlbum = async (albumId: string) => {
+    const updated = albums.filter(a => a.id !== albumId);
+    setAlbums(updated);
+    localStorage.setItem('app_albums', JSON.stringify(updated));
+    await dbService.deleteAlbum(albumId);
+  };
+
   // Filter data by currently active Class (relational classId matching)
   const filteredStudents = students.filter(s => s.classId === activeClassId);
 
@@ -988,7 +1032,8 @@ export default function App() {
       case 'academic': return 'Học tập & Rèn Luyện';
       case 'class': return 'Quản lý';
       case 'news': return 'Tin tức / Thông báo';
-      case 'documents': return 'Văn bản cần';
+      case 'documents': return 'Văn bản';
+      case 'albums': return 'Album Ảnh';
       case 'plans': return 'Kế hoạch';
       case 'tasks': return 'Nhiệm vụ';
       case 'settings': return 'Quản lý chung';
@@ -1004,7 +1049,8 @@ export default function App() {
       case 'academic': return '& Kết quả';
       case 'class': return 'Lớp học';
       case 'news': return 'Cổng thông tin';
-      case 'documents': return '& Lưu trữ';
+      case 'documents': return '& Quy định';
+      case 'albums': return '& Hoạt động';
       case 'plans': return 'Giảng dạy';
       case 'tasks': return '& Báo cáo';
       case 'settings': return '& Cài đặt hệ thống';
@@ -1049,6 +1095,7 @@ export default function App() {
           teachers={teachers}
           academicUpdates={academicUpdates}
           documentCategories={documentCategories}
+          albums={albums}
           onOpenAdmin={() => {
             if (currentUser) {
               setViewMode('admin');
@@ -1169,7 +1216,7 @@ export default function App() {
   }
 
   const isTabFrozen = (tabId: string) => {
-    return currentUser?.quyen === 'hotro' && tabId !== 'class' && tabId !== 'news';
+    return currentUser?.quyen === 'hotro' && tabId !== 'class' && tabId !== 'news' && tabId !== 'albums';
   };
 
   return (
@@ -1337,19 +1384,40 @@ export default function App() {
                 onClick={() => {
                   if (!isTabFrozen('documents')) setActiveTab('documents');
                 }}
-                className={`w-full p-2 rounded-xl flex items-center justify-between transition text-xs font-medium border text-left ${
+                className={`w-full p-2.5 rounded-xl flex items-center justify-between transition text-xs font-semibold border text-left ${
                   isTabFrozen('documents')
                     ? 'border-transparent text-slate-300 cursor-not-allowed opacity-40 bg-transparent'
                     : activeTab === 'documents'
-                      ? 'bg-amber-50 border-amber-200/80 text-amber-900 shadow-sm font-bold'
-                      : 'border-transparent text-slate-600 hover:text-slate-950 hover:bg-slate-50 font-bold'
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-sm font-bold'
+                      : 'border-transparent text-slate-700 hover:text-blue-700 hover:bg-blue-50/70 font-semibold'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'documents' ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
-                  <span className="text-amber-950 tracking-wide uppercase">&lt;VĂN BẢN CẦN&gt;</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'documents' ? 'bg-white' : 'bg-blue-500'}`}></div>
+                  <span className="tracking-wide">VĂN BẢN</span>
                 </div>
                 {isTabFrozen('documents') && <Lock size={12} className="text-slate-400" />}
+              </button>
+
+              <button
+                id="nav-tab-albums"
+                disabled={isTabFrozen('albums')}
+                onClick={() => {
+                  if (!isTabFrozen('albums')) setActiveTab('albums');
+                }}
+                className={`w-full p-2.5 rounded-xl flex items-center justify-between transition text-xs font-semibold border text-left ${
+                  isTabFrozen('albums')
+                    ? 'border-transparent text-slate-300 cursor-not-allowed opacity-40 bg-transparent'
+                    : activeTab === 'albums'
+                      ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-sm font-bold'
+                      : 'border-transparent text-slate-700 hover:text-amber-800 hover:bg-amber-50/60 font-semibold'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${activeTab === 'albums' ? 'bg-amber-500' : 'bg-slate-400'}`}></div>
+                  <span className="tracking-wide">Album Ảnh</span>
+                </div>
+                {isTabFrozen('albums') && <Lock size={12} className="text-slate-400" />}
               </button>
             </div>
           </div>
@@ -1502,7 +1570,8 @@ export default function App() {
               { id: 'diligence', label: 'HS: Vi phạm' },
               { id: 'class', label: 'Lớp: Quản lý' },
               { id: 'news', label: 'Lớp: Tin tức' },
-              { id: 'documents', label: '<Văn bản cần>', isTeacherOnly: true },
+              { id: 'documents', label: 'Văn bản' },
+              { id: 'albums', label: 'Album Ảnh' },
               { id: 'plans', label: 'GV: Kế hoạch', isTeacherOnly: true },
               { id: 'tasks', label: 'GV: Nhiệm vụ', isTeacherOnly: true },
               { id: 'settings', label: 'GV: Quản lý', isTeacherOnly: true }
@@ -1814,6 +1883,19 @@ export default function App() {
                 onUpdateCategory={handleUpdateDocCategory}
                 onDeleteCategory={handleDeleteDocCategory}
                 activeSchoolYearId={activeSchoolYearId}
+                isReadOnly={isReadOnly}
+                currentUser={currentUser}
+              />
+            )}
+
+            {activeTab === 'albums' && (
+              <AlbumManager
+                albums={albums}
+                schoolYears={schoolYears}
+                activeSchoolYearId={activeSchoolYearId}
+                onAddAlbum={handleAddAlbum}
+                onUpdateAlbum={handleUpdateAlbum}
+                onDeleteAlbum={handleDeleteAlbum}
                 isReadOnly={isReadOnly}
                 currentUser={currentUser}
               />
