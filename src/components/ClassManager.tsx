@@ -32,18 +32,35 @@ import {
   Info,
   Clock,
   ClipboardList,
-  ChevronDown
+  ChevronDown,
+  Search,
+  X,
+  UserPlus,
+  ArrowRightLeft,
+  Filter
 } from 'lucide-react';
 
 const getStudentAvatarUrl = (avatarUrl: string | undefined): string => {
   return normalizeImageUrl(avatarUrl);
 };
 
+export function removeVietnameseTones(str: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
 interface ClassManagerProps {
   students: Student[];
   activeClassId: string;
   className: string;
   onUpdateStudent: (updated: Student) => void;
+  onUpdateStudents?: (students: Student[]) => void;
   isReadOnly?: boolean;
   tasks?: StudentTask[];
   onAddTask?: (task: StudentTask) => void;
@@ -69,6 +86,7 @@ export default function ClassManager({
   activeClassId, 
   className,
   onUpdateStudent,
+  onUpdateStudents,
   isReadOnly = false,
   tasks = [],
   onAddTask,
@@ -171,11 +189,53 @@ export default function ClassManager({
     }
   };
 
+  // --- GROUPING SEARCH STATE ---
+  const [groupGlobalSearch, setGroupGlobalSearch] = useState<string>('');
+  const [groupColSearches, setGroupColSearches] = useState<Record<string, string>>({});
+  const [quickAddGroupOpen, setQuickAddGroupOpen] = useState<string | null>(null);
+  const [quickAddGroupSearch, setQuickAddGroupSearch] = useState<string>('');
+
   // --- SEATING CHART STATE ---
-  const [rows, setRows] = useState<number>(4);
-  const [cols, setCols] = useState<number>(6);
-  const [selectedSeat, setSelectedSeat] = useState<{ row: number; col: number } | null>(null);
-  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [rows, setRows] = useState<number>(() => {
+    const saved = localStorage.getItem(`app_seating_rows_${activeClassId}`);
+    return saved ? parseInt(saved, 10) : 4;
+  });
+  const [cols, setCols] = useState<number>(() => {
+    const saved = localStorage.getItem(`app_seating_cols_${activeClassId}`);
+    return saved ? parseInt(saved, 10) : 6;
+  });
+
+  useEffect(() => {
+    const savedR = localStorage.getItem(`app_seating_rows_${activeClassId}`);
+    const savedC = localStorage.getItem(`app_seating_cols_${activeClassId}`);
+    if (savedR) setRows(parseInt(savedR, 10));
+    if (savedC) setCols(parseInt(savedC, 10));
+  }, [activeClassId]);
+
+  const handleSetRows = (newRows: number) => {
+    setRows(newRows);
+    localStorage.setItem(`app_seating_rows_${activeClassId}`, newRows.toString());
+  };
+
+  const handleSetCols = (newCols: number) => {
+    setCols(newCols);
+    localStorage.setItem(`app_seating_cols_${activeClassId}`, newCols.toString());
+  };
+
+  const [activeSeatDropdown, setActiveSeatDropdown] = useState<{ row: number; col: number } | null>(null);
+  const [activeSeatSearch, setActiveSeatSearch] = useState<string>('');
+  const [seatingHighlightSearch, setSeatingHighlightSearch] = useState<string>('');
+  const [showSeatingTools, setShowSeatingTools] = useState<boolean>(false);
+  const [seatingToastMessage, setSeatingToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (seatingToastMessage) {
+      const timer = setTimeout(() => {
+        setSeatingToastMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [seatingToastMessage]);
 
   // --- TIMETABLE STATE ---
   const [timetable, setTimetable] = useState<TimetableCell[]>([]);
@@ -465,84 +525,95 @@ export default function ClassManager({
   }, [activeClassId, selectedDutyWeek, students]);
 
   // --- SEATING CHART LOGIC ---
-  const handleAssignStudent = (studentId: string | undefined) => {
-    if (!selectedSeat) return;
-    
-    // If studentId is provided, first unassign that student from any existing seats
-    if (studentId) {
-      const currentStudent = classStudents.find(s => s.id === studentId);
-      if (currentStudent) {
-        // Find if someone else is in selected seat and clear them
-        const occupant = classStudents.find(s => s.seatRow === selectedSeat.row && s.seatCol === selectedSeat.col);
-        if (occupant) {
-          onUpdateStudent({ ...occupant, seatRow: undefined, seatCol: undefined });
-        }
-        
-        onUpdateStudent({
-          ...currentStudent,
-          seatRow: selectedSeat.row,
-          seatCol: selectedSeat.col
-        });
-      }
-    } else {
-      // Clear seat
-      const occupant = classStudents.find(s => s.seatRow === selectedSeat.row && s.seatCol === selectedSeat.col);
+  const handleAssignStudentToSeat = (row: number, col: number, studentId: string | undefined) => {
+    const targetStudent = studentId ? classStudents.find(s => s.id === studentId) : null;
+
+    if (studentId && targetStudent) {
+      // 1. If someone else is already sitting in this seat, remove them
+      const occupant = classStudents.find(s => s.seatRow === row && s.seatCol === col && s.id !== studentId);
       if (occupant) {
         onUpdateStudent({ ...occupant, seatRow: undefined, seatCol: undefined });
       }
+      // 2. Assign the target student to the seat
+      onUpdateStudent({
+        ...targetStudent,
+        seatRow: row,
+        seatCol: col
+      });
+      setSeatingToastMessage(`Đã xếp ${targetStudent.name} vào Hàng ${row + 1} - Cột ${col + 1}`);
+    } else {
+      // Clear seat
+      const occupant = classStudents.find(s => s.seatRow === row && s.seatCol === col);
+      if (occupant) {
+        onUpdateStudent({ ...occupant, seatRow: undefined, seatCol: undefined });
+      }
+      setSeatingToastMessage(`Đã để trống vị trí Hàng ${row + 1} - Cột ${col + 1}`);
     }
     
-    setShowAssignModal(false);
-    setSelectedSeat(null);
+    setActiveSeatDropdown(null);
+    setActiveSeatSearch('');
   };
 
+  // Direct random arrangement WITHOUT annoying modal warnings ("không cảnh báo hoài")
   const autoArrangeSeats = () => {
     if (classStudents.length === 0) return;
-    
-    triggerConfirm(
-      'Sắp xếp tự động sơ đồ',
-      'Bạn có chắc chắn muốn sắp xếp tự động toàn bộ sơ đồ ghế ngồi? Sơ đồ cũ sẽ bị thay thế.',
-      () => {
-        // Unassign everyone in this class first
-        classStudents.forEach(s => {
-          onUpdateStudent({ ...s, seatRow: undefined, seatCol: undefined });
-        });
 
-        // Shuffle active students
-        const shuffled = [...classStudents].sort(() => Math.random() - 0.5);
-        
-        // Fill row by row, col by col
-        let studentIdx = 0;
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            if (studentIdx < shuffled.length) {
-              onUpdateStudent({
-                ...shuffled[studentIdx],
-                seatRow: r,
-                seatCol: c
-              });
-              studentIdx++;
-            }
-          }
+    // Shuffle students randomly
+    const shuffled = [...classStudents].sort(() => Math.random() - 0.5);
+    
+    let studentIdx = 0;
+    const seatMap = new Map<string, { r: number; c: number }>();
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (studentIdx < shuffled.length) {
+          seatMap.set(shuffled[studentIdx].id, { r, c });
+          studentIdx++;
         }
-      },
-      { type: 'warning', confirmText: 'Sắp xếp ngay' }
-    );
+      }
+    }
+
+    if (onUpdateStudents) {
+      const newAllStudents = students.map(s => {
+        if (s.classId !== activeClassId) return s;
+        if (seatMap.has(s.id)) {
+          const pos = seatMap.get(s.id)!;
+          return { ...s, seatRow: pos.r, seatCol: pos.c };
+        }
+        return { ...s, seatRow: undefined, seatCol: undefined };
+      });
+      onUpdateStudents(newAllStudents);
+    } else {
+      classStudents.forEach(s => {
+        if (seatMap.has(s.id)) {
+          const pos = seatMap.get(s.id)!;
+          onUpdateStudent({ ...s, seatRow: pos.r, seatCol: pos.c });
+        } else if (s.seatRow !== undefined || s.seatCol !== undefined) {
+          onUpdateStudent({ ...s, seatRow: undefined, seatCol: undefined });
+        }
+      });
+    }
+
+    setSeatingToastMessage('🎲 Đã sắp xếp ngẫu nhiên toàn bộ sơ đồ ghế ngồi!');
   };
 
   const clearAllSeats = () => {
-    triggerConfirm(
-      'Xóa sạch sơ đồ',
-      'Bạn có chắc chắn muốn xóa sạch sơ đồ ghế ngồi hiện tại của lớp?',
-      () => {
-        classStudents.forEach(s => {
-          if (s.seatRow !== undefined || s.seatCol !== undefined) {
-            onUpdateStudent({ ...s, seatRow: undefined, seatCol: undefined });
-          }
-        });
-      },
-      { type: 'danger', confirmText: 'Xóa ngay' }
-    );
+    if (onUpdateStudents) {
+      const newAllStudents = students.map(s => {
+        if (s.classId === activeClassId && (s.seatRow !== undefined || s.seatCol !== undefined)) {
+          return { ...s, seatRow: undefined, seatCol: undefined };
+        }
+        return s;
+      });
+      onUpdateStudents(newAllStudents);
+    } else {
+      classStudents.forEach(s => {
+        if (s.seatRow !== undefined || s.seatCol !== undefined) {
+          onUpdateStudent({ ...s, seatRow: undefined, seatCol: undefined });
+        }
+      });
+    }
+    setSeatingToastMessage('🗑️ Đã xóa sạch sơ đồ ghế ngồi!');
   };
 
   // --- GROUPING LOGIC ---
@@ -566,6 +637,7 @@ export default function ClassManager({
       message,
       () => {
         let studentsToProcess = [...classStudents];
+        const groupMap = new Map<string, string>();
         
         if (byGender) {
           // Group by gender, then distribute evenly to maintain gender balance
@@ -581,13 +653,13 @@ export default function ClassManager({
             const targetGroup = `Tổ ${groupNum}`;
             
             if (counter % 2 === 0 && maleIdx < males.length) {
-              onUpdateStudent({ ...males[maleIdx], groupName: targetGroup });
+              groupMap.set(males[maleIdx].id, targetGroup);
               maleIdx++;
             } else if (femaleIdx < females.length) {
-              onUpdateStudent({ ...females[femaleIdx], groupName: targetGroup });
+              groupMap.set(females[femaleIdx].id, targetGroup);
               femaleIdx++;
             } else if (maleIdx < males.length) {
-              onUpdateStudent({ ...males[maleIdx], groupName: targetGroup });
+              groupMap.set(males[maleIdx].id, targetGroup);
               maleIdx++;
             }
             counter++;
@@ -597,7 +669,22 @@ export default function ClassManager({
           const shuffled = [...studentsToProcess].sort(() => Math.random() - 0.5);
           shuffled.forEach((student, index) => {
             const groupNum = (index % 4) + 1;
-            onUpdateStudent({ ...student, groupName: `Tổ ${groupNum}` });
+            groupMap.set(student.id, `Tổ ${groupNum}`);
+          });
+        }
+
+        if (onUpdateStudents) {
+          const newAllStudents = students.map(s => {
+            if (s.classId === activeClassId && groupMap.has(s.id)) {
+              return { ...s, groupName: groupMap.get(s.id) };
+            }
+            return s;
+          });
+          onUpdateStudents(newAllStudents);
+        } else {
+          groupMap.forEach((gName, sId) => {
+            const st = students.find(s => s.id === sId);
+            if (st) onUpdateStudent({ ...st, groupName: gName });
           });
         }
       },
@@ -610,11 +697,21 @@ export default function ClassManager({
       'Đặt lại Tổ',
       'Bạn có chắc chắn muốn đặt lại tất cả học sinh về trạng thái "Chưa phân tổ"?',
       () => {
-        classStudents.forEach(student => {
-          if (student.groupName) {
-            onUpdateStudent({ ...student, groupName: undefined });
-          }
-        });
+        if (onUpdateStudents) {
+          const newAllStudents = students.map(s => {
+            if (s.classId === activeClassId && s.groupName) {
+              return { ...s, groupName: undefined };
+            }
+            return s;
+          });
+          onUpdateStudents(newAllStudents);
+        } else {
+          classStudents.forEach(student => {
+            if (student.groupName) {
+              onUpdateStudent({ ...student, groupName: undefined });
+            }
+          });
+        }
       },
       { type: 'danger', confirmText: 'Đặt lại ngay' }
     );
@@ -686,8 +783,8 @@ export default function ClassManager({
               {/* Toolbar/Actions */}
               <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-1">Tính năng chia tổ tự động</h3>
-                  <p className="text-[11px] text-white/40">Hệ thống hỗ trợ xếp tổ tuần tự ngẫu nhiên hoặc cân bằng giới tính nam/nữ.</p>
+                  <h3 className="text-sm font-bold text-white mb-1">Quản lý Phân Tổ Lớp Học</h3>
+                  <p className="text-[11px] text-white/40">Chia tổ tự động hoặc tìm kiếm và phân bổ học sinh vào từng tổ nhanh chóng.</p>
                 </div>
                 {!isReadOnly && (
                   <div className="flex flex-wrap gap-2">
@@ -716,22 +813,75 @@ export default function ClassManager({
                 )}
               </div>
 
+              {/* Global search bar for grouping */}
+              <div className="bg-[#141414] p-3.5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={groupGlobalSearch}
+                    onChange={(e) => setGroupGlobalSearch(e.target.value)}
+                    placeholder="🔍 Tìm nhanh học sinh trong toàn bộ lớp (theo tên hoặc mã số)..."
+                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-9 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-amber-500 transition"
+                  />
+                  {groupGlobalSearch && (
+                    <button
+                      onClick={() => setGroupGlobalSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                      title="Xóa tìm kiếm"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {groupGlobalSearch && (
+                  <div className="flex items-center gap-2 text-xs text-amber-400 font-bold bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 whitespace-nowrap">
+                    <span>Khớp {classStudents.filter(s => s.name.toLowerCase().includes(groupGlobalSearch.toLowerCase()) || s.id.toLowerCase().includes(groupGlobalSearch.toLowerCase())).length} học sinh</span>
+                    <button onClick={() => setGroupGlobalSearch('')} className="hover:text-white ml-1">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Group columns grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                 {(['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4', 'Chưa phân tổ'] as const).map(gName => {
-                  const list = groups[gName];
-                  const isUnassigned = gName === 'Chưa phân tổ';
+                  const rawList = groups[gName];
+                  const colSearch = (groupColSearches[gName] || '').toLowerCase().trim();
+                  const globalSearch = groupGlobalSearch.toLowerCase().trim();
                   
+                  // Filter list by both column-specific search and global search
+                  const list = rawList.filter(student => {
+                    const matchCol = !colSearch || student.name.toLowerCase().includes(colSearch) || student.id.toLowerCase().includes(colSearch);
+                    const matchGlobal = !globalSearch || student.name.toLowerCase().includes(globalSearch) || student.id.toLowerCase().includes(globalSearch);
+                    return matchCol && matchGlobal;
+                  });
+
+                  const isUnassigned = gName === 'Chưa phân tổ';
+                  const isQuickAddOpen = quickAddGroupOpen === gName;
+
+                  // Students not in this group (eligible to be quickly added)
+                  const candidatesToAdd = isQuickAddOpen
+                    ? classStudents
+                        .filter(s => (gName === 'Chưa phân tổ' ? s.groupName : s.groupName !== gName))
+                        .filter(s => {
+                          const q = quickAddGroupSearch.toLowerCase().trim();
+                          return !q || s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q);
+                        })
+                    : [];
+
                   return (
                     <div 
                       key={gName} 
-                      className={`flex flex-col rounded-3xl border p-4 shadow-sm h-[500px] ${
+                      className={`flex flex-col rounded-3xl border p-4 shadow-sm h-[580px] ${
                         isUnassigned 
                           ? 'bg-white/[0.01] border-white/5' 
                           : 'bg-[#111] border-white/5'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/5">
+                      {/* Column Header */}
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
                         <div className="flex items-center gap-2">
                           <div className={`w-2.5 h-2.5 rounded-full ${
                             gName === 'Tổ 1' ? 'bg-blue-400' :
@@ -742,63 +892,153 @@ export default function ClassManager({
                           <h4 className="text-xs font-bold uppercase tracking-wider text-white">{gName}</h4>
                         </div>
                         <span className="text-[10px] font-mono bg-white/5 px-2 py-0.5 rounded-full text-white/60 font-semibold">
-                          Sĩ số: {list.length}
+                          {list.length !== rawList.length ? `${list.length}/${rawList.length}` : rawList.length} HS
                         </span>
                       </div>
 
-                      {/* Dropdown list for changing groups easily on mobile/desktop */}
-                      <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
-                        {list.length === 0 ? (
-                          <div className="text-center py-20 text-white/20 text-xs italic">
-                            Trống
-                          </div>
-                        ) : (
-                          list.map(student => (
-                            <div 
-                              key={student.id} 
-                              className="p-2.5 bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col gap-1.5 hover:bg-white/[0.04] transition"
+                      {/* Search box for this specific column */}
+                      <div className="relative mb-2">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
+                        <input
+                          type="text"
+                          value={groupColSearches[gName] || ''}
+                          onChange={(e) => setGroupColSearches(prev => ({ ...prev, [gName]: e.target.value }))}
+                          placeholder={`Lọc tìm trong ${gName}...`}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-7 py-1.5 text-[11px] text-white placeholder-white/30 focus:outline-none focus:border-amber-500 transition"
+                        />
+                        {groupColSearches[gName] && (
+                          <button
+                            onClick={() => setGroupColSearches(prev => ({ ...prev, [gName]: '' }))}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Quick Add Student to this Group */}
+                      {!isReadOnly && (
+                        <div className="mb-2 relative">
+                          {!isQuickAddOpen ? (
+                            <button
+                              onClick={() => {
+                                setQuickAddGroupOpen(gName);
+                                setQuickAddGroupSearch('');
+                              }}
+                              className="w-full py-1.5 px-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition"
                             >
-                              <div className="flex items-start justify-between gap-1.5">
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-white text-[10px] tracking-tight leading-snug break-words">{student.name}</div>
-                                  <div className="text-[9px] text-white/40 font-mono mt-0.5">{student.id} • {student.gender}</div>
-                                </div>
-                                
-                                {student.avatarUrl ? (
-                                  <img 
-                                    src={getStudentAvatarUrl(student.avatarUrl)}
-                                    alt={student.name} 
-                                    className="w-7 h-7 rounded-full object-cover border border-white/10"
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/30 shrink-0 font-bold uppercase">
-                                    {student.name.split(' ').pop()?.slice(0, 2)}
+                              <UserPlus size={11} />
+                              <span>+ Thêm HS vào {gName}</span>
+                            </button>
+                          ) : (
+                            <div className="bg-[#181818] border border-amber-500/40 rounded-xl p-2 space-y-1.5 shadow-lg">
+                              <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                <span className="text-[10px] font-bold text-amber-400">Thêm nhanh vào {gName}</span>
+                                <button
+                                  onClick={() => setQuickAddGroupOpen(null)}
+                                  className="text-white/40 hover:text-white"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={quickAddGroupSearch}
+                                onChange={(e) => setQuickAddGroupSearch(e.target.value)}
+                                placeholder="Gõ tên HS cần thêm..."
+                                className="w-full bg-black/50 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white focus:outline-none focus:border-amber-500"
+                              />
+                              <div className="max-h-28 overflow-y-auto space-y-1 custom-scrollbar">
+                                {candidatesToAdd.length === 0 ? (
+                                  <div className="text-[9px] text-white/30 text-center py-2 italic">
+                                    Không tìm thấy học sinh khác
                                   </div>
+                                ) : (
+                                  candidatesToAdd.slice(0, 10).map(cand => (
+                                    <button
+                                      key={cand.id}
+                                      onClick={() => {
+                                        handleAssignGroup(cand.id, gName === 'Chưa phân tổ' ? '' : gName);
+                                        setQuickAddGroupSearch('');
+                                      }}
+                                      className="w-full text-left px-2 py-1 bg-white/5 hover:bg-amber-500/20 hover:text-amber-300 rounded text-[9px] text-white/80 flex items-center justify-between transition"
+                                    >
+                                      <span className="truncate font-semibold">{cand.name}</span>
+                                      <span className="text-[8px] text-white/40 font-mono ml-1 shrink-0">
+                                        {cand.groupName || 'Chưa tổ'}
+                                      </span>
+                                    </button>
+                                  ))
                                 )}
                               </div>
-
-                              {/* Transfer Group options */}
-                              <div className="flex items-center gap-1 mt-1 pt-1.5 border-t border-white/5">
-                                <span className="text-[9px] text-white/30 mr-1">Chuyển Tổ:</span>
-                                <select
-                                  disabled={isReadOnly}
-                                  value={student.groupName || 'Chưa phân tổ'}
-                                  onChange={(e) => handleAssignGroup(student.id, e.target.value === 'Chưa phân tổ' ? '' : e.target.value)}
-                                  className="bg-[#181818] text-white text-[10px] border border-white/10 rounded-lg px-2 py-0.5 w-full focus:outline-none focus:border-amber-500 font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <option value="Chưa phân tổ">---</option>
-                                  <option value="Tổ 1">Tổ 1</option>
-                                  <option value="Tổ 2">Tổ 2</option>
-                                  <option value="Tổ 3">Tổ 3</option>
-                                  <option value="Tổ 4">Tổ 4</option>
-                                </select>
-                              </div>
                             </div>
-                          ))
+                          )}
+                        </div>
+                      )}
+
+                      {/* Dropdown list for changing groups easily on mobile/desktop */}
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                        {list.length === 0 ? (
+                          <div className="text-center py-16 text-white/20 text-xs italic">
+                            {rawList.length === 0 ? 'Trống' : 'Không có kết quả tìm kiếm'}
+                          </div>
+                        ) : (
+                          list.map(student => {
+                            const isHighlighted = (groupGlobalSearch && (student.name.toLowerCase().includes(groupGlobalSearch.toLowerCase()) || student.id.toLowerCase().includes(groupGlobalSearch.toLowerCase()))) ||
+                                                  (groupColSearches[gName] && (student.name.toLowerCase().includes(groupColSearches[gName].toLowerCase()) || student.id.toLowerCase().includes(groupColSearches[gName].toLowerCase())));
+
+                            return (
+                              <div 
+                                key={student.id} 
+                                className={`p-2.5 border rounded-2xl flex flex-col gap-1.5 transition ${
+                                  isHighlighted
+                                    ? 'bg-amber-500/10 border-amber-500/40 ring-1 ring-amber-500/30'
+                                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-white text-[11px] tracking-tight leading-snug break-words">{student.name}</div>
+                                    <div className="text-[9px] text-white/40 font-mono mt-0.5">{student.id} • {student.gender}</div>
+                                  </div>
+                                  
+                                  {student.avatarUrl ? (
+                                    <img 
+                                      src={getStudentAvatarUrl(student.avatarUrl)}
+                                      alt={student.name} 
+                                      className="w-7 h-7 rounded-full object-cover border border-white/10 shrink-0"
+                                      referrerPolicy="no-referrer"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/30 shrink-0 font-bold uppercase">
+                                      {student.name.split(' ').pop()?.slice(0, 2)}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Transfer Group options */}
+                                <div className="flex items-center gap-1 mt-0.5 pt-1.5 border-t border-white/5">
+                                  <span className="text-[9px] text-white/30 mr-1 whitespace-nowrap">Chuyển:</span>
+                                  <select
+                                    disabled={isReadOnly}
+                                    value={student.groupName || 'Chưa phân tổ'}
+                                    onChange={(e) => handleAssignGroup(student.id, e.target.value === 'Chưa phân tổ' ? '' : e.target.value)}
+                                    className="bg-[#181818] text-white text-[10px] border border-white/10 rounded-lg px-2 py-0.5 w-full focus:outline-none focus:border-amber-500 font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <option value="Chưa phân tổ">--- Chưa phân tổ ---</option>
+                                    <option value="Tổ 1">Tổ 1</option>
+                                    <option value="Tổ 2">Tổ 2</option>
+                                    <option value="Tổ 3">Tổ 3</option>
+                                    <option value="Tổ 4">Tổ 4</option>
+                                  </select>
+                                </div>
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -808,303 +1048,527 @@ export default function ClassManager({
             </div>
           )}
 
-          {/* ======================= SƠ ĐỒ LỚP VIEW ======================= */}
-          {subTab === 'seating' && (
-            <div className="space-y-6">
-              {/* Top seating action controls */}
-              <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-1">Quản lý Sơ đồ lớp học (Bàn ghế)</h3>
-                  <p className="text-[11px] text-white/40">Bấm vào từng ô ghế để chọn xếp học sinh hoặc đổi vị trí.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                    <span className="text-xs text-white/40">Số hàng:</span>
-                    <select
-                      disabled={isReadOnly}
-                      value={rows}
-                      onChange={(e) => setRows(parseInt(e.target.value))}
-                      className="bg-transparent text-white font-semibold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
-                    >
-                      {[3, 4, 5, 6, 7, 8].map(r => <option key={r} value={r} className="bg-[#111]">{r}</option>)}
-                    </select>
-                    <span className="text-white/10">|</span>
-                    <span className="text-xs text-white/40">Số cột:</span>
-                    <select
-                      disabled={isReadOnly}
-                      value={cols}
-                      onChange={(e) => setCols(parseInt(e.target.value))}
-                      className="bg-transparent text-white font-semibold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
-                    >
-                      {[4, 5, 6, 7, 8, 9, 10].map(c => <option key={c} value={c} className="bg-[#111]">{c}</option>)}
-                    </select>
+          {/* ======================= SƠ ĐỒ LỚP VIEW (DẠNG BẢNG LISTBOX) ======================= */}
+          {subTab === 'seating' && (() => {
+            const seatedStudents = classStudents.filter(s => s.seatRow !== undefined && s.seatCol !== undefined);
+            const unseatedStudents = classStudents.filter(s => s.seatRow === undefined || s.seatCol === undefined);
+            const hlQuery = removeVietnameseTones(seatingHighlightSearch);
+
+            return (
+              <div className="space-y-6">
+                {/* Top seating action controls & stats */}
+                <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-white">Sơ Đồ Bố Trí Bàn Ghế Lớp Học</h3>
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold rounded-lg">
+                        Dạng Bảng ListBox
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-white/40 mt-0.5">
+                      Bấm vào ô bất kỳ để chọn/gõ tìm học sinh hoặc bấm nút <strong>Sắp xếp ngẫu nhiên</strong> để tự động xếp nhanh tức thì.
+                    </p>
                   </div>
-                  
-                  {!isReadOnly && (
-                    <>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Direct 1-click Random Sort button (No annoying warnings / modal confirmation) */}
+                    {!isReadOnly && (
                       <button
+                        type="button"
+                        disabled={classStudents.length === 0}
                         onClick={autoArrangeSeats}
-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-black rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                        className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                        title="Tự động xáo trộn và xếp ngẫu nhiên toàn bộ học sinh vào bàn (bấm là xếp ngay)"
                       >
-                        <Shuffle size={13} />
-                        <span>Sắp xếp Tự động</span>
+                        <Shuffle size={13} className="stroke-[2.5]" />
+                        <span>Sắp xếp ngẫu nhiên</span>
                       </button>
+                    )}
+
+                    {/* Clear All Seats button */}
+                    {!isReadOnly && seatedStudents.length > 0 && (
                       <button
+                        type="button"
                         onClick={clearAllSeats}
-                        className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                        className="px-3 py-2 bg-white/5 hover:bg-rose-500/20 text-white/70 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                        title="Xóa sơ đồ để xếp lại từ đầu"
                       >
                         <Trash2 size={13} />
-                        <span>Xóa Sơ đồ</span>
+                        <span>Xóa sơ đồ</span>
                       </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                    )}
 
-              {/* Seating Layout Map */}
-              <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-                
-                {/* Visual Seat Map */}
-                <div className="xl:col-span-3 bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center">
-                  
-                  {/* BẢNG ĐEN (Blackboard header) */}
-                  <div className="w-2/3 max-w-sm bg-slate-700 text-white-pure border-t-4 border-amber-500 py-3 rounded-b-xl text-center shadow-md mb-12 select-none">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">BẢNG ĐEN / BÀN GIÁO VIÊN</span>
+                    {/* Row / Col selectors */}
+                    <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+                      <span className="text-xs text-white/40">Hàng:</span>
+                      <select
+                        disabled={isReadOnly}
+                        value={rows}
+                        onChange={(e) => handleSetRows(parseInt(e.target.value))}
+                        className="bg-transparent text-white font-semibold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {[3, 4, 5, 6, 7, 8].map(r => <option key={r} value={r} className="bg-[#111]">{r}</option>)}
+                      </select>
+                      <span className="text-white/10">|</span>
+                      <span className="text-xs text-white/40">Cột:</span>
+                      <select
+                        disabled={isReadOnly}
+                        value={cols}
+                        onChange={(e) => handleSetCols(parseInt(e.target.value))}
+                        className="bg-transparent text-white font-semibold text-xs border-none focus:outline-none focus:ring-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {[4, 5, 6, 7, 8, 9, 10].map(c => <option key={c} value={c} className="bg-[#111]">{c}</option>)}
+                      </select>
+                    </div>
                   </div>
+                </div>
 
-                  {/* Seat grid */}
-                  <div className="w-full overflow-auto custom-scrollbar flex justify-start lg:justify-center pb-2">
-                    <div 
-                      className="grid gap-3.5 p-1"
-                      style={{
-                        gridTemplateColumns: `repeat(${cols}, minmax(110px, 1fr))`
-                      }}
+                {/* Instant Action Feedback Toast Banner */}
+                {seatingToastMessage && (
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 px-4 py-2.5 rounded-2xl text-xs font-black flex items-center justify-between shadow-lg shadow-emerald-500/20 animate-fadeIn">
+                    <div className="flex items-center gap-2">
+                      <Check size={16} className="stroke-[3] text-slate-950" />
+                      <span>{seatingToastMessage}</span>
+                    </div>
+                    <button 
+                      onClick={() => setSeatingToastMessage(null)}
+                      className="p-1 hover:bg-black/10 rounded-lg transition text-slate-950"
                     >
-                      {Array.from({ length: rows }).map((_, rIndex) => (
-                        Array.from({ length: cols }).map((_, cIndex) => {
-                          const student = getStudentAtSeat(rIndex, cIndex);
-                          const isSelected = selectedSeat?.row === rIndex && selectedSeat?.col === cIndex;
-
-                          return (
-                            <div
-                              key={`${rIndex}-${cIndex}`}
-                              onClick={() => {
-                                if (isReadOnly) return;
-                                setSelectedSeat({ row: rIndex, col: cIndex });
-                                setShowAssignModal(true);
-                              }}
-                              className={`aspect-square rounded-2xl p-2.5 border transition flex flex-col justify-between select-none relative group ${
-                                isReadOnly ? 'cursor-default' : 'cursor-pointer'
-                              } ${
-                                isSelected
-                                  ? 'bg-amber-100 border-amber-500 shadow-sm ring-2 ring-amber-400/20 text-amber-900'
-                                  : student
-                                    ? student.gender === 'Nữ'
-                                      ? 'bg-rose-50 hover:bg-rose-100 border-rose-200 hover:border-rose-300 text-rose-900'
-                                      : 'bg-blue-50 hover:bg-blue-100 border-blue-200 hover:border-blue-300 text-blue-900'
-                                    : 'bg-slate-50/50 hover:bg-slate-100 border-slate-200 border-dashed hover:border-slate-300 text-slate-400'
-                              }`}
-                            >
-                              {/* Row/Col coordinate badge */}
-                              <div className="flex justify-between items-center">
-                                <span className="text-[8px] font-mono text-slate-400">H{rIndex + 1}-C{cIndex + 1}</span>
-                                {student?.groupName && (
-                                  <span className={`text-[8px] px-1 py-0.5 rounded font-black uppercase ${
-                                    student.groupName === 'Tổ 1' ? 'bg-blue-100 text-blue-700 border border-blue-200/40' :
-                                    student.groupName === 'Tổ 2' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200/40' :
-                                    student.groupName === 'Tổ 3' ? 'bg-purple-100 text-purple-700 border border-purple-200/40' :
-                                    'bg-amber-100 text-amber-700 border border-amber-200/40'
-                                  }`}>
-                                    {student.groupName.replace('Tổ ', 'T')}
-                                  </span>
-                                )}
-                              </div>
-
-                              {student ? (
-                                <div className="flex flex-col items-center justify-center flex-1 text-center py-1 overflow-hidden">
-                                  {student.avatarUrl ? (
-                                    <img 
-                                      src={getStudentAvatarUrl(student.avatarUrl)}
-                                      alt={student.name} 
-                                      className="w-8 h-8 rounded-full object-cover border border-slate-200 mb-1 shrink-0"
-                                      referrerPolicy="no-referrer"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] mb-1 font-black shrink-0 uppercase ${
-                                      student.gender === 'Nữ' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                                    }`}>
-                                      {student.name.split(' ').pop()?.slice(0, 2)}
-                                    </div>
-                                  )}
-                                  <div className="text-[10px] font-black text-slate-800 truncate w-full" title={student.name}>
-                                    {student.name.split(' ').pop()}
-                                  </div>
-                                  <div className="text-[8px] text-slate-400 font-bold font-mono mt-0.5 truncate w-full">
-                                    {student.id}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 group-hover:text-slate-600 transition">
-                                  <Plus size={14} className="mb-0.5" />
-                                  <span className="text-[9px] font-black uppercase tracking-wider">Trống</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      ))}
-                    </div>
+                      <X size={13} className="stroke-[2.5]" />
+                    </button>
                   </div>
+                )}
 
-                  {/* Color note explanation */}
-                  <div className="flex flex-wrap gap-5 mt-6 border-t border-slate-100 pt-5 w-full justify-center text-[10px] font-bold">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 bg-blue-50 border border-blue-200 rounded-md" />
-                      <span className="text-slate-600">Học sinh Nam</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 bg-rose-50 border border-rose-200 rounded-md" />
-                      <span className="text-slate-600">Học sinh Nữ</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 bg-slate-50 border border-slate-200 border-dashed rounded-md" />
-                      <span className="text-slate-400">Ghế trống</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Panel: Unseated Students List */}
-                <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col h-[520px]">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-1">Chưa xếp chỗ ngồi</h4>
-                  <p className="text-[10px] text-white/40 mb-4">Danh sách ({unseatedStudents.length} học sinh)</p>
-
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                    {unseatedStudents.length === 0 ? (
-                      <div className="text-center py-24 text-white/20 text-xs italic">
-                        Tất cả học sinh đã được xếp vị trí ghế ngồi!
-                      </div>
+                {/* Seating overview progress & Search Bar */}
+                <div className="bg-[#111] p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Stats */}
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                    <span className="text-white/60">
+                      Sĩ số: <strong className="text-white">{classStudents.length}</strong> học sinh
+                    </span>
+                    <span className="text-white/20">•</span>
+                    <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl font-bold flex items-center gap-1.5">
+                      <Check size={12} />
+                      <span>Đã có chỗ: {seatedStudents.length}/{classStudents.length}</span>
+                    </span>
+                    {unseatedStudents.length > 0 ? (
+                      <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl font-bold">
+                        Chưa xếp: {unseatedStudents.length} HS
+                      </span>
                     ) : (
-                      unseatedStudents.map(student => (
-                        <div 
-                          key={student.id}
-                          className="p-2.5 bg-white/[0.02] border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/[0.04] transition group"
-                        >
-                          <div className="truncate pr-2">
-                            <div className="font-semibold text-white text-xs truncate">{student.name}</div>
-                            <div className="text-[9px] text-white/40 font-mono mt-0.5">{student.id} • {student.gender}</div>
-                          </div>
-                          {!isReadOnly && (
-                            <button
-                              onClick={() => {
-                                // Find first empty seat
-                                let placed = false;
-                                for (let r = 0; r < rows; r++) {
-                                  for (let c = 0; c < cols; c++) {
-                                    if (!getStudentAtSeat(r, c)) {
-                                      onUpdateStudent({ ...student, seatRow: r, seatCol: c });
-                                      placed = true;
-                                      break;
-                                    }
-                                  }
-                                  if (placed) break;
-                                }
-                                if (!placed) {
-                                  alert('Không còn ghế trống trên sơ đồ! Bạn có thể tăng số hàng/cột.');
-                                }
-                              }}
-                              className="p-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 hover:text-amber-400 border border-amber-500/20 rounded-lg text-[9px] font-bold transition whitespace-nowrap"
-                            >
-                              Xếp ghế trống
-                            </button>
-                          )}
-                        </div>
-                      ))
+                      <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl font-bold">
+                        Đã xếp đủ 100%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Table Search & Highlight Bar */}
+                  <div className="relative w-full md:w-80">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500" />
+                    <input
+                      type="text"
+                      value={seatingHighlightSearch}
+                      onChange={(e) => setSeatingHighlightSearch(e.target.value)}
+                      placeholder="🔍 Tìm & làm nổi bật HS trên bảng..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-amber-500 transition"
+                    />
+                    {seatingHighlightSearch && (
+                      <button
+                        onClick={() => setSeatingHighlightSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                      >
+                        <X size={13} />
+                      </button>
                     )}
                   </div>
                 </div>
-              </div>
 
-              {/* Assignment Dialog Modal popup */}
-              {showAssignModal && selectedSeat && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                  <div className="bg-[#111] border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                      <h4 className="text-sm font-bold text-white">Xếp chỗ ngồi cho vị trí Hàng {selectedSeat.row + 1}, Cột {selectedSeat.col + 1}</h4>
-                      <button 
-                        onClick={() => {
-                          setShowAssignModal(false);
-                          setSelectedSeat(null);
-                        }}
-                        className="text-white/40 hover:text-white"
-                      >
-                        ×
-                      </button>
+                {/* THE MAIN TABLE LAYOUT */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-md p-6 md:p-8 flex flex-col items-center select-none overflow-hidden">
+                  {/* Blackboard Graphic Header */}
+                  <div className="w-full max-w-md bg-slate-800 text-amber-400 border-t-4 border-amber-500 py-2.5 rounded-b-2xl text-center shadow mb-8">
+                    <div className="text-[11px] font-black uppercase tracking-[0.25em]">
+                      🎓 BẢNG ĐEN / BÀN GIÁO VIÊN
                     </div>
+                  </div>
 
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                      {/* Option to clear current occupancy */}
-                      {getStudentAtSeat(selectedSeat.row, selectedSeat.col) && (
-                        <button
-                          onClick={() => handleAssignStudent(undefined)}
-                          className="w-full text-left p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
-                        >
-                          <Trash2 size={13} />
-                          <span>Mời học sinh rời khỏi ghế này (Trống)</span>
-                        </button>
-                      )}
-
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-white/30 pt-1">Học sinh chưa xếp ghế:</div>
-                      {unseatedStudents.length === 0 ? (
-                        <p className="text-xs text-white/30 italic py-2">Mọi học sinh trong lớp đều đã có ghế ngồi.</p>
-                      ) : (
-                        unseatedStudents.map(s => (
-                          <button
-                            key={s.id}
-                            onClick={() => handleAssignStudent(s.id)}
-                            className="w-full text-left p-3 bg-white/5 hover:bg-amber-600/10 border border-white/5 hover:border-amber-500/20 rounded-xl text-xs text-white transition flex items-center justify-between"
-                          >
-                            <span>{s.name} ({s.id})</span>
-                            <span className="text-[10px] text-white/40 font-mono">{s.gender}</span>
-                          </button>
-                        ))
-                      )}
-
-                      {classStudents.filter(s => s.seatRow !== undefined).length > 0 && (
-                        <>
-                          <div className="text-[10px] uppercase font-bold tracking-wider text-white/30 pt-3">Học sinh đã xếp ghế khác (Chuyển chỗ):</div>
-                          {classStudents.filter(s => s.seatRow !== undefined && !(s.seatRow === selectedSeat.row && s.seatCol === selectedSeat.col)).map(s => (
-                            <button
-                              key={s.id}
-                              onClick={() => handleAssignStudent(s.id)}
-                              className="w-full text-left p-3 bg-white/[0.02] hover:bg-amber-600/10 border border-white/5 hover:border-amber-500/20 rounded-xl text-xs text-white/70 hover:text-white transition flex items-center justify-between"
+                  {/* Classroom Desk Grid Table */}
+                  <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                    <table className="w-full border-collapse text-left min-w-[700px]">
+                      <thead>
+                        <tr>
+                          <th className="p-2 w-16 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                            Vị trí
+                          </th>
+                          {Array.from({ length: cols }).map((_, cIdx) => (
+                            <th 
+                              key={cIdx} 
+                              className="p-2 text-center text-[11px] font-black text-slate-700 uppercase tracking-wider border-b border-slate-200 bg-slate-50/80"
                             >
-                              <span>{s.name} ({s.id})</span>
-                              <span className="text-[9px] text-white/40 font-mono">Đang ghế H{s.seatRow! + 1}-C{s.seatCol! + 1}</span>
-                            </button>
+                              Dãy / Cột {cIdx + 1}
+                            </th>
                           ))}
-                        </>
-                      )}
-                    </div>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {Array.from({ length: rows }).map((_, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-slate-50/40 transition">
+                            {/* Row Header */}
+                            <td className="p-2 text-center text-[11px] font-black text-slate-500 bg-slate-50/60 border-r border-slate-200 whitespace-nowrap">
+                              Hàng {rIdx + 1}
+                            </td>
 
-                    <div className="pt-2 text-right">
-                      <button
-                        onClick={() => {
-                          setShowAssignModal(false);
-                          setSelectedSeat(null);
-                        }}
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold transition border border-white/5"
-                      >
-                        Hủy bỏ
-                      </button>
+                            {/* Desk Cells (ListBoxes) */}
+                            {Array.from({ length: cols }).map((_, cIdx) => {
+                              const student = getStudentAtSeat(rIdx, cIdx);
+                              const isDropdownOpen = activeSeatDropdown?.row === rIdx && activeSeatDropdown?.col === cIdx;
+                              
+                              // Highlight search matching
+                              const studentNameNormalized = student ? removeVietnameseTones(student.name) : '';
+                              const studentIdNormalized = student ? student.id.toLowerCase() : '';
+                              const isSearchMatch = Boolean(
+                                hlQuery && student && (studentNameNormalized.includes(hlQuery) || studentIdNormalized.includes(hlQuery))
+                              );
+                              const isDimmed = Boolean(hlQuery && !isSearchMatch);
+
+                              return (
+                                <td 
+                                  key={`${rIdx}-${cIdx}`}
+                                  className="p-1.5 align-top relative min-w-[130px] max-w-[180px]"
+                                >
+                                  {/* ListBox Desk Cell Button */}
+                                  <div
+                                    onClick={() => {
+                                      if (isReadOnly) return;
+                                      if (isDropdownOpen) {
+                                        setActiveSeatDropdown(null);
+                                        setActiveSeatSearch('');
+                                      } else {
+                                        setActiveSeatDropdown({ row: rIdx, col: cIdx });
+                                        setActiveSeatSearch('');
+                                      }
+                                    }}
+                                    className={`w-full min-h-[72px] p-2 rounded-2xl border transition flex flex-col justify-between cursor-pointer text-left relative group ${
+                                      isSearchMatch
+                                        ? 'bg-amber-300 border-amber-600 ring-4 ring-amber-400/50 shadow-md scale-[1.03] z-10'
+                                        : isDropdownOpen
+                                          ? 'bg-amber-50 border-amber-500 ring-2 ring-amber-400/30 shadow-md z-20'
+                                          : student
+                                            ? student.gender === 'Nữ'
+                                              ? `bg-rose-50/80 hover:bg-rose-100/90 border-rose-200 hover:border-rose-300 text-rose-950 ${isDimmed ? 'opacity-30 grayscale-[50%]' : ''}`
+                                              : `bg-blue-50/80 hover:bg-blue-100/90 border-blue-200 hover:border-blue-300 text-blue-950 ${isDimmed ? 'opacity-30 grayscale-[50%]' : ''}`
+                                            : `bg-slate-50/60 hover:bg-slate-100 border-slate-200 border-dashed hover:border-slate-300 text-slate-400 ${isDimmed ? 'opacity-20' : ''}`
+                                    }`}
+                                  >
+                                    {/* Coordinate & Group Badge */}
+                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                      <span className={`text-[8px] font-mono font-bold ${isSearchMatch ? 'text-slate-900 font-black' : 'text-slate-400'}`}>
+                                        H{rIdx + 1}-C{cIdx + 1}
+                                      </span>
+                                      
+                                      <div className="flex items-center gap-1">
+                                        {student?.groupName && (
+                                          <span className={`text-[8px] px-1 py-0.2 rounded font-black uppercase ${
+                                            isSearchMatch
+                                              ? 'bg-slate-900 text-amber-300'
+                                              : student.groupName === 'Tổ 1' ? 'bg-blue-100 text-blue-700 border border-blue-200/50' :
+                                                student.groupName === 'Tổ 2' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200/50' :
+                                                student.groupName === 'Tổ 3' ? 'bg-purple-100 text-purple-700 border border-purple-200/50' :
+                                                'bg-amber-100 text-amber-700 border border-amber-200/50'
+                                          }`}>
+                                            {student.groupName.replace('Tổ ', 'T')}
+                                          </span>
+                                        )}
+
+                                        {/* Dropdown Indicator */}
+                                        {!isReadOnly && (
+                                          <ChevronDown size={11} className={`text-slate-400 group-hover:text-slate-700 transition ${isDropdownOpen ? 'rotate-180 text-amber-600' : ''}`} />
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Student Info or Empty Label */}
+                                    {student ? (
+                                      <div className="flex flex-col flex-1 justify-center min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="font-extrabold text-[11px] text-slate-900 truncate leading-tight flex-1" title={student.name}>
+                                            {student.name}
+                                          </div>
+                                          {!isReadOnly && (
+                                            <button
+                                              title="Xóa khỏi ghế này"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleAssignStudentToSeat(rIdx, cIdx, undefined);
+                                              }}
+                                              className="text-slate-300 hover:text-rose-600 p-0.5 rounded opacity-0 group-hover:opacity-100 transition shrink-0"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-[9px] font-mono font-semibold text-slate-500 mt-0.5 truncate">
+                                          <span>{student.id}</span>
+                                          <span>•</span>
+                                          <span>{student.gender}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 group-hover:text-slate-600 transition">
+                                        <span className="text-[10px] font-bold">+ Chọn HS ▾</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* INLINE LISTBOX DROPDOWN / POPOVER */}
+                                  {isDropdownOpen && !isReadOnly && (() => {
+                                    const q = removeVietnameseTones(activeSeatSearch);
+
+                                    // 1. Unseated students matching search
+                                    const matchingUnseated = unseatedStudents.filter(s => {
+                                      if (!q) return true;
+                                      return removeVietnameseTones(s.name).includes(q) || s.id.toLowerCase().includes(q);
+                                    });
+
+                                    // 2. Seated students in OTHER seats matching search
+                                    const matchingOtherSeated = classStudents.filter(s => {
+                                      if (s.seatRow === undefined || s.seatCol === undefined) return false;
+                                      if (s.seatRow === rIdx && s.seatCol === cIdx) return false; // not current
+                                      if (!q) return true;
+                                      return removeVietnameseTones(s.name).includes(q) || s.id.toLowerCase().includes(q);
+                                    });
+
+                                    const totalMatching = matchingUnseated.length + matchingOtherSeated.length;
+
+                                    return (
+                                      <>
+                                        {/* Click outside backdrop */}
+                                        <div 
+                                          className="fixed inset-0 z-40 bg-black/20"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveSeatDropdown(null);
+                                            setActiveSeatSearch('');
+                                          }}
+                                        />
+
+                                        {/* Dropdown Container */}
+                                        <div 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="absolute left-0 top-full mt-1.5 w-72 md:w-80 bg-[#161616] text-white border border-white/20 rounded-2xl p-3 shadow-2xl z-50 animate-fadeIn"
+                                        >
+                                          {/* Header */}
+                                          <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-xs font-bold text-amber-400">
+                                                Xếp ghế Hàng {rIdx + 1} - Cột {cIdx + 1}
+                                              </span>
+                                            </div>
+                                            <button
+                                              onClick={() => {
+                                                setActiveSeatDropdown(null);
+                                                setActiveSeatSearch('');
+                                              }}
+                                              className="text-white/40 hover:text-white p-0.5 rounded-lg transition"
+                                            >
+                                              <X size={13} />
+                                            </button>
+                                          </div>
+
+                                          {/* Quick Search Input */}
+                                          <div className="relative mb-2">
+                                            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-amber-500" />
+                                            <input
+                                              autoFocus
+                                              type="text"
+                                              value={activeSeatSearch}
+                                              onChange={(e) => setActiveSeatSearch(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                  // Select top match immediately on Enter!
+                                                  const topMatch = matchingUnseated[0] || matchingOtherSeated[0];
+                                                  if (topMatch) {
+                                                    handleAssignStudentToSeat(rIdx, cIdx, topMatch.id);
+                                                  }
+                                                } else if (e.key === 'Escape') {
+                                                  setActiveSeatDropdown(null);
+                                                  setActiveSeatSearch('');
+                                                }
+                                              }}
+                                              placeholder="🔍 Gõ tên hoặc mã (gõ vài chữ là xong)..."
+                                              className="w-full bg-black/60 border border-white/15 rounded-xl pl-8 pr-7 py-1.5 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+                                            />
+                                            {activeSeatSearch && (
+                                              <button
+                                                onClick={() => setActiveSeatSearch('')}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                                              >
+                                                <X size={11} />
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {/* Current Seat Unassign Button */}
+                                          {student && (
+                                            <button
+                                              onClick={() => handleAssignStudentToSeat(rIdx, cIdx, undefined)}
+                                              className="w-full text-left p-1.5 mb-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition"
+                                            >
+                                              <Trash2 size={11} />
+                                              <span>Mời {student.name} rời ghế (Để trống)</span>
+                                            </button>
+                                          )}
+
+                                          {/* Student List */}
+                                          <div className="max-h-56 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                            {totalMatching === 0 ? (
+                                              <div className="text-center py-6 text-white/30 text-xs italic">
+                                                Không tìm thấy học sinh nào khớp "{activeSeatSearch}"
+                                              </div>
+                                            ) : (
+                                              <>
+                                                {/* 1. Unseated Students Section */}
+                                                {matchingUnseated.length > 0 && (
+                                                  <div>
+                                                    <div className="text-[9px] font-black uppercase tracking-wider text-emerald-400 px-1 mb-1 flex items-center justify-between">
+                                                      <span>Chưa có ghế ({matchingUnseated.length})</span>
+                                                      <span className="text-white/30 lowercase font-normal">nhấn Enter để chọn</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                      {matchingUnseated.map(s => (
+                                                        <button
+                                                          key={s.id}
+                                                          onClick={() => handleAssignStudentToSeat(rIdx, cIdx, s.id)}
+                                                          className="w-full text-left p-1.5 bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl text-xs text-white transition flex items-center justify-between group cursor-pointer"
+                                                        >
+                                                          <div className="truncate pr-1">
+                                                            <div className="font-bold text-white group-hover:text-amber-300 transition text-[11px] truncate">
+                                                              {s.name}
+                                                            </div>
+                                                            <div className="text-[9px] text-white/40 font-mono">
+                                                              {s.id} • {s.gender} {s.groupName ? `• ${s.groupName}` : ''}
+                                                            </div>
+                                                          </div>
+                                                          <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                                            Chọn ↵
+                                                          </span>
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                )}
+
+                                                {/* 2. Other Seated Students Section */}
+                                                {matchingOtherSeated.length > 0 && (
+                                                  <div className="pt-1">
+                                                    <div className="text-[9px] font-black uppercase tracking-wider text-blue-400 px-1 mb-1">
+                                                      Đang ở ghế khác ({matchingOtherSeated.length})
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                      {matchingOtherSeated.map(s => (
+                                                        <button
+                                                          key={s.id}
+                                                          onClick={() => handleAssignStudentToSeat(rIdx, cIdx, s.id)}
+                                                          className="w-full text-left p-1.5 bg-white/[0.03] hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 rounded-xl text-xs text-white/80 hover:text-white transition flex items-center justify-between group cursor-pointer"
+                                                        >
+                                                          <div className="truncate pr-1">
+                                                            <div className="font-bold text-white group-hover:text-amber-300 transition text-[11px] truncate">
+                                                              {s.name}
+                                                            </div>
+                                                            <div className="text-[9px] text-white/40 font-mono">
+                                                              {s.id} • H{s.seatRow! + 1}-C{s.seatCol! + 1}
+                                                            </div>
+                                                          </div>
+                                                          <span className="text-[9px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                                            Chuyển ↵
+                                                          </span>
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table Color Legend */}
+                  <div className="flex flex-wrap items-center justify-center gap-6 mt-6 pt-5 border-t border-slate-100 w-full text-[10px] font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded-md" />
+                      <span className="text-slate-700">Học sinh Nam</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 bg-rose-100 border border-rose-300 rounded-md" />
+                      <span className="text-slate-700">Học sinh Nữ</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 bg-amber-300 border border-amber-600 rounded-md" />
+                      <span className="text-amber-900 font-extrabold">Đang tìm kiếm</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 bg-slate-50 border border-slate-300 border-dashed rounded-md" />
+                      <span className="text-slate-400">Bàn trống</span>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* BOTTOM UNSEATED CHIPS BAR */}
+                {unseatedStudents.length > 0 && !isReadOnly && (
+                  <div className="bg-[#111] p-4 rounded-3xl border border-white/5 shadow-md">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                          Chưa xếp chỗ ({unseatedStudents.length} học sinh)
+                        </span>
+                        <span className="text-[10px] text-white/40">Bấm vào tên để tự động xếp vào ghế trống kế tiếp</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar pt-1">
+                      {unseatedStudents.map(student => (
+                        <button
+                          key={student.id}
+                          onClick={() => {
+                            // Find first empty seat
+                            let placed = false;
+                            for (let r = 0; r < rows; r++) {
+                              for (let c = 0; c < cols; c++) {
+                                if (!getStudentAtSeat(r, c)) {
+                                  handleAssignStudentToSeat(r, c, student.id);
+                                  placed = true;
+                                  break;
+                                }
+                              }
+                              if (placed) break;
+                            }
+                            if (!placed) {
+                              alert('Không còn ghế trống trên sơ đồ! Bạn có thể tăng số Hàng hoặc Cột.');
+                            }
+                          }}
+                          className="px-2.5 py-1.5 bg-white/5 hover:bg-amber-500/20 text-white hover:text-amber-300 border border-white/10 hover:border-amber-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                        >
+                          <Plus size={11} className="text-amber-400" />
+                          <span>{student.name}</span>
+                          <span className="text-[9px] text-white/40 font-mono font-normal">({student.id})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ======================= THỜI KHÓA BIỂU VIEW ======================= */}
           {subTab === 'timetable' && (
