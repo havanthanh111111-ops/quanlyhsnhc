@@ -1096,6 +1096,7 @@ export default function App() {
           academicUpdates={academicUpdates}
           documentCategories={documentCategories}
           albums={albums}
+          onUpdateStudent={handleUpdateStudent}
           onOpenAdmin={() => {
             if (currentUser) {
               setViewMode('admin');
