@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Student, ViolationRecord, StudentTask, ClassItem, SchoolYear, AcademicUpdate, GPAEntry } from '../types';
-import { Plus, Search, Edit2, Trash2, User, Phone, MapPin, Calendar, Heart, ShieldAlert, CheckCircle, Download, FileText, Printer, Check, X, ArrowRightLeft, Upload, Camera, BookOpen, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, User, Phone, MapPin, Calendar, Heart, ShieldAlert, CheckCircle, Download, FileText, Printer, Check, X, ArrowRightLeft, Upload, Camera, BookOpen, ArrowRight, ArrowLeft, Key, Lock, ShieldCheck, RefreshCw } from 'lucide-react';
 import { CustomConfirmModal } from './CustomConfirmModal';
 import StudentAcademicTracker from './StudentAcademicTracker';
 import html2canvas from 'html2canvas';
@@ -183,7 +183,9 @@ export default function StudentManager({
   const [formMotherName, setFormMotherName] = useState('');
   const [formMotherJob, setFormMotherJob] = useState('');
   const [formAvatarUrl, setFormAvatarUrl] = useState('');
+  const [formPassword, setFormPassword] = useState('123');
   const [uploadingStudentId, setUploadingStudentId] = useState<string | null>(null);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
 
   // PDF Export Modal & Customization States
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -403,6 +405,7 @@ export default function StudentManager({
     setFormMotherName('');
     setFormMotherJob('');
     setFormAvatarUrl('');
+    setFormPassword('123');
     setIsEditing(false);
     setIsAdding(true);
   };
@@ -420,8 +423,64 @@ export default function StudentManager({
     setFormMotherName(student.motherName || '');
     setFormMotherJob(student.motherJob || '');
     setFormAvatarUrl(student.avatarUrl || '');
+    setFormPassword(student.password || '123');
     setIsAdding(false);
     setIsEditing(true);
+  };
+
+  const handleResetPassword = (student: Student, newPassword = '123') => {
+    setConfirmModal({
+      title: 'Xác nhận Đặt lại Mật khẩu',
+      message: `Bạn có chắc muốn đặt lại mật khẩu tra cứu Sổ liên lạc của học sinh "${student.name}" (${student.id}) về mặc định là "${newPassword}" không?`,
+      onConfirm: () => {
+        try {
+          const updatedStudent: Student = {
+            ...student,
+            password: newPassword
+          };
+          onUpdateStudent(updatedStudent);
+          setResetSuccessMessage(`Đã đặt lại mật khẩu cho học sinh "${student.name}" về "${newPassword}" thành công!`);
+          setTimeout(() => {
+            setResetSuccessMessage(null);
+          }, 4000);
+        } catch (err: any) {
+          console.error('Lỗi khi reset mật khẩu:', err);
+          alert(`Không thể đặt lại mật khẩu: ${err.message || err}`);
+        } finally {
+          setConfirmModal(null);
+        }
+      }
+    });
+  };
+
+  const handleResetAllClassPasswords = () => {
+    if (students.length === 0) {
+      alert('Không có học sinh nào trong danh sách hiện tại để đặt lại mật khẩu.');
+      return;
+    }
+    setConfirmModal({
+      title: 'Xác nhận Đặt lại Mật khẩu Cả lớp',
+      message: `Bạn có chắc muốn đặt lại mật khẩu tra cứu Sổ liên lạc của TẤT CẢ ${students.length} học sinh trong lớp về mặc định là "123" không?`,
+      onConfirm: () => {
+        try {
+          students.forEach(s => {
+            onUpdateStudent({
+              ...s,
+              password: '123'
+            });
+          });
+          setResetSuccessMessage(`Đã đặt lại mật khẩu về "123" cho toàn bộ ${students.length} học sinh trong lớp!`);
+          setTimeout(() => {
+            setResetSuccessMessage(null);
+          }, 4000);
+        } catch (err: any) {
+          console.error('Lỗi khi reset mật khẩu cả lớp:', err);
+          alert(`Không thể đặt lại mật khẩu: ${err.message || err}`);
+        } finally {
+          setConfirmModal(null);
+        }
+      }
+    });
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -430,6 +489,8 @@ export default function StudentManager({
       alert('Vui lòng nhập tên học sinh');
       return;
     }
+
+    const currentStudent = students.find(s => s.id === formId);
 
     const studentData: Student = {
       id: formId,
@@ -443,8 +504,9 @@ export default function StudentManager({
       fatherJob: formFatherJob.trim(),
       motherName: formMotherName.trim(),
       motherJob: formMotherJob.trim(),
-      classId: isAdding ? '' : (students.find(s => s.id === formId)?.classId || ''),
-      avatarUrl: formAvatarUrl.trim()
+      classId: isAdding ? '' : (currentStudent?.classId || ''),
+      avatarUrl: formAvatarUrl.trim(),
+      password: formPassword.trim() || currentStudent?.password || '123'
     };
 
     if (isAdding) {
@@ -951,9 +1013,31 @@ export default function StudentManager({
               >
                 <ArrowRightLeft size={14} /> Chuyển lớp
               </button>
+              <button
+                id="btn-reset-all-passwords"
+                onClick={handleResetAllClassPasswords}
+                className="flex items-center gap-1 px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-xs font-bold border border-amber-500/20 transition shadow-sm"
+                title="Đặt lại mật khẩu toàn bộ học sinh trong lớp về 123"
+              >
+                <Key size={13} /> Reset Pass Lớp (123)
+              </button>
             </div>
           )}
         </div>
+
+        {/* Success Alert Banner for Resetting Passwords */}
+        {resetSuccessMessage && (
+          <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-medium flex items-center gap-2 animate-fadeIn">
+            <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
+            <span className="flex-1">{resetSuccessMessage}</span>
+            <button
+              onClick={() => setResetSuccessMessage(null)}
+              className="text-emerald-400/60 hover:text-emerald-400 transition"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative mb-3">
@@ -1195,6 +1279,36 @@ export default function StudentManager({
                 </div>
               </div>
 
+              {/* Password Setting & Quick Reset in Form */}
+              <div className="p-3.5 bg-amber-500/5 border border-amber-500/15 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Key size={14} className="text-amber-400" /> Mật khẩu tra cứu Sổ liên lạc
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFormPassword('123')}
+                    className="text-[11px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 transition cursor-pointer flex items-center gap-1"
+                    title="Đặt lại giá trị mặc định là 123"
+                  >
+                    <RefreshCw size={11} /> Đặt về mặc định (123)
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    id="form-student-password"
+                    type="text"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="Mật khẩu (mặc định: 123)"
+                    className="w-full bg-black/40 border border-white/15 text-white font-mono rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <p className="text-[10px] text-white/40 leading-relaxed">
+                  Mật khẩu này dùng cho Học sinh & Phụ huynh đăng nhập xem Sổ liên lạc điện tử tại Cổng công khai. Mặc định khởi tạo là <strong className="text-amber-400">123</strong>.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Họ tên bố (cha)</label>
@@ -1413,19 +1527,30 @@ export default function StudentManager({
 
               <div className="flex gap-2 items-center">
                 {!isReadOnly && (
-                  <button
-                    id="btn-transfer-student"
-                    onClick={() => {
-                      setIsTransferring(true);
-                      const otherClasses = classes.filter(c => c.id !== selectedStudent.classId);
-                      setTransferClassId(otherClasses[0]?.id || '');
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-black rounded-xl text-xs font-bold transition shadow-sm border border-amber-500/20"
-                    title="Chuyển lớp học sinh"
-                  >
-                    <ArrowRightLeft size={14} />
-                    <span>Chuyển lớp</span>
-                  </button>
+                  <>
+                    <button
+                      id="btn-reset-student-password"
+                      onClick={() => handleResetPassword(selectedStudent)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition shadow-sm"
+                      title="Đặt lại mật khẩu của học sinh này về mặc định (123)"
+                    >
+                      <Key size={13} />
+                      <span>Reset Pass (123)</span>
+                    </button>
+                    <button
+                      id="btn-transfer-student"
+                      onClick={() => {
+                        setIsTransferring(true);
+                        const otherClasses = classes.filter(c => c.id !== selectedStudent.classId);
+                        setTransferClassId(otherClasses[0]?.id || '');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-black rounded-xl text-xs font-bold transition shadow-sm border border-amber-500/20"
+                      title="Chuyển lớp học sinh"
+                    >
+                      <ArrowRightLeft size={14} />
+                      <span>Chuyển lớp</span>
+                    </button>
+                  </>
                 )}
                 <button
                   id="btn-export-student-pdf"
@@ -1442,7 +1567,7 @@ export default function StudentManager({
                       id="btn-edit-student"
                       onClick={() => handleOpenEdit(selectedStudent)}
                       className="p-2 hover:bg-white/10 border border-white/10 rounded-lg text-white/60 hover:text-amber-500 transition"
-                      title="Sửa học sinh"
+                      title="Sửa thông tin / Đổi mật khẩu học sinh"
                     >
                       <Edit2 size={14} />
                     </button>
@@ -1476,6 +1601,33 @@ export default function StudentManager({
                     <div>
                       <div className="text-[9px] font-medium text-white/30 uppercase tracking-wider">SĐT Phụ huynh</div>
                       <div className="text-xs font-semibold text-white/80">{selectedStudent.parentPhone || 'Chưa cung cấp'}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                    <Key size={16} className="text-amber-400 shrink-0" />
+                    <div className="flex-1">
+                      <div className="text-[9px] font-medium text-amber-400/70 uppercase tracking-wider">Mật khẩu Sổ liên lạc</div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {selectedStudent.password || '123'}
+                        </span>
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => handleResetPassword(selectedStudent)}
+                            className="text-[10px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer"
+                            title="Đặt lại về 123"
+                          >
+                            Reset về 123
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                    <User size={16} className="text-white/40 shrink-0" />
+                    <div>
+                      <div className="text-[9px] font-medium text-white/30 uppercase tracking-wider">Giới tính & Trạng thái</div>
+                      <div className="text-xs font-semibold text-white/80">{selectedStudent.gender} • {selectedStudent.status}</div>
                     </div>
                   </div>
                   <div className="col-span-2 flex items-center gap-3 p-3 bg-white/[0.02] rounded-xl border border-white/5">
