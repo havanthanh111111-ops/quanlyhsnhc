@@ -40,6 +40,7 @@ export interface Student {
   seatRow?: number; // Row index (1-based or 0-based, let's say 1-based or 0-based)
   seatCol?: number; // Col index
   role?: string; // Class officers / roles, e.g. "Lớp trưởng", "Tổ trưởng Tổ 1"
+  password?: string; // Access PIN/Password for student & parent (defaults to "123")
 }
 
 export interface ViolationType {
