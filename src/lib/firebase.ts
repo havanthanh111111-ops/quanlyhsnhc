@@ -57,6 +57,7 @@ if (activeConfig.projectId !== 'fleet-realm-5k91c' && databaseId && databaseId.s
 // We use experimentalForceLongPolling to prevent iframe sandboxes and school firewalls from blocking gRPC/WebSockets
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
+  ignoreUndefinedProperties: true,
 }, databaseId || undefined);
 
 export { 
