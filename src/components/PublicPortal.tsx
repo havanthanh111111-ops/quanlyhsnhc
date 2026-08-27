@@ -40,7 +40,12 @@ import {
   Image as ImageIcon,
   Images,
   Play,
-  Camera
+  Camera,
+  Lock,
+  Key,
+  ShieldCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   Student, 
@@ -54,6 +59,7 @@ import {
   DocumentCategory,
   PhotoAlbum
 } from '../types';
+import StudentPortalDetail from './StudentPortalDetail';
 import { initialAlbums } from '../data/initialData';
 import AlbumSlideshowModal from './AlbumSlideshowModal';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
@@ -90,6 +96,7 @@ interface PublicPortalProps {
   documentCategories?: DocumentCategory[];
   albums?: PhotoAlbum[];
   onOpenAdmin: () => void;
+  onUpdateStudent?: (student: Student) => void;
   initialSchoolYearId?: string;
 }
 
@@ -105,6 +112,7 @@ export default function PublicPortal({
   documentCategories: allDocCategories = [],
   albums: propAlbums = [],
   onOpenAdmin,
+  onUpdateStudent,
   initialSchoolYearId
 }: PublicPortalProps) {
   // Navigation states
@@ -146,6 +154,15 @@ export default function PublicPortal({
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedAnn, setSelectedAnn] = useState<any | null>(null);
   const [zoomImage, setZoomImage] = useState<{ url: string; title?: string } | null>(null);
+
+  // Student Portal Authentication states
+  const [isStudentAuthOpen, setIsStudentAuthOpen] = useState<boolean>(false);
+  const [pendingAuthStudent, setPendingAuthStudent] = useState<Student | null>(null);
+  const [authMahsInput, setAuthMahsInput] = useState<string>('');
+  const [authPasswordInput, setAuthPasswordInput] = useState<string>('');
+  const [authError, setAuthError] = useState<string>('');
+  const [showAuthPassword, setShowAuthPassword] = useState<boolean>(false);
+  const [authenticatedStudentId, setAuthenticatedStudentId] = useState<string | null>(null);
 
   // Timetable class select
   const [timetableClassId, setTimetableClassId] = useState<string>('');
@@ -707,12 +724,84 @@ export default function PublicPortal({
   const activeTasksCount = tasks.filter(t => t.status !== 'Đã hoàn thành').length;
 
   // Search filter for students
-  const filteredStudents = students.filter(s => {
-    const matchesClass = s.classId === selectedClassId;
-    const matchesQuery = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         s.id.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesClass && matchesQuery;
-  });
+  const filteredStudents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) {
+      return students.filter(s => s.classId === selectedClassId);
+    }
+    // Check current class first
+    const inClass = students.filter(s => {
+      const matchesClass = s.classId === selectedClassId;
+      const matchesQuery = s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q);
+      return matchesClass && matchesQuery;
+    });
+
+    if (inClass.length > 0) return inClass;
+
+    // Fallback: If searched by ID or name across all classes
+    return students.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q));
+  }, [students, selectedClassId, searchQuery]);
+
+  // Initiate student lookup with authentication gate
+  const handleInitiateStudentLookup = (student: Student) => {
+    if (authenticatedStudentId === student.id) {
+      setSelectedStudent(student);
+      return;
+    }
+    setPendingAuthStudent(student);
+    setAuthMahsInput(student.id);
+    setAuthPasswordInput('');
+    setAuthError('');
+    setShowAuthPassword(false);
+    setIsStudentAuthOpen(true);
+  };
+
+  const handleOpenDirectAuthModal = () => {
+    setPendingAuthStudent(null);
+    setAuthMahsInput('');
+    setAuthPasswordInput('');
+    setAuthError('');
+    setShowAuthPassword(false);
+    setIsStudentAuthOpen(true);
+  };
+
+  const handleStudentAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedMahs = authMahsInput.trim().toUpperCase();
+    const trimmedPass = authPasswordInput.trim();
+
+    if (!trimmedMahs) {
+      setAuthError('Vui lòng nhập Mã học sinh!');
+      return;
+    }
+    if (!trimmedPass) {
+      setAuthError('Vui lòng nhập Mật khẩu (mặc định ban đầu là: 123)!');
+      return;
+    }
+
+    // Find student across all students (case-insensitive)
+    const targetStudent = allStudents.find(
+      s => s.id.trim().toUpperCase() === trimmedMahs
+    );
+
+    if (!targetStudent) {
+      setAuthError(`Không tìm thấy học sinh có mã số "${trimmedMahs}". Vui lòng kiểm tra lại!`);
+      return;
+    }
+
+    const expectedPass = targetStudent.password || '123';
+    if (trimmedPass !== expectedPass) {
+      setAuthError('Mật khẩu không chính xác! (Mật khẩu mặc định là: 123).');
+      return;
+    }
+
+    // Authentication successful
+    setAuthenticatedStudentId(targetStudent.id);
+    setSelectedStudent(targetStudent);
+    setIsStudentAuthOpen(false);
+    setPendingAuthStudent(null);
+    setAuthError('');
+  };
 
   // Handle contact form submit
   const handleContactSubmit = (e: React.FormEvent) => {
@@ -1265,11 +1354,22 @@ export default function PublicPortal({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* CARD 1: FILTER */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4 lg:col-span-2">
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
-                      <Search size={16} className="text-blue-600" /> BỘ LỌC TRA CỨU HỌC SINH
-                    </h3>
-                    <p className="text-[11px] text-slate-400">Chọn lớp và nhập họ tên hoặc mã học sinh để tìm kiếm nhanh sơ đồ bàn học, nhiệm vụ và nề nếp.</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
+                        <Search size={16} className="text-blue-600" /> BỘ LỌC TRA CỨU HỌC SINH
+                      </h3>
+                      <p className="text-[11px] text-slate-400">Chọn lớp và nhập họ tên hoặc mã học sinh. Để xem chi tiết, vui lòng nhập mật khẩu (mặc định: 123).</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenDirectAuthModal}
+                      className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-black flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-xs"
+                    >
+                      <Lock size={13} className="text-blue-600" />
+                      <span>Tra cứu bảo mật (Mã & Pass)</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1354,23 +1454,34 @@ export default function PublicPortal({
               {/* SEARCH RESULTS LIST */}
               {!selectedStudent && (
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-                  <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
-                    KẾT QUẢ TÌM KIẾM ({filteredStudents.length} học sinh)
-                  </h4>
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                      KẾT QUẢ TÌM KIẾM ({filteredStudents.length} học sinh)
+                    </h4>
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60 flex items-center gap-1">
+                      <Lock size={10} className="text-amber-600" /> Cần nhập Mật khẩu để xem chi tiết
+                    </span>
+                  </div>
                   
                   {filteredStudents.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {filteredStudents.map(student => (
                         <button
                           key={student.id}
-                          onClick={() => setSelectedStudent(student)}
-                          className="p-3 bg-slate-50 hover:bg-blue-50/50 border border-slate-200 hover:border-blue-400 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+                          onClick={() => handleInitiateStudentLookup(student)}
+                          className="p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-400 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
                         >
                           <div className="space-y-1 min-w-0">
-                            <h5 className="text-xs font-black text-slate-800 group-hover:text-blue-700 transition truncate">{student.name}</h5>
+                            <div className="flex items-center gap-1.5">
+                              <h5 className="text-xs font-black text-slate-800 group-hover:text-blue-700 transition truncate">{student.name}</h5>
+                              <Lock size={11} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
+                            </div>
                             <p className="text-[10px] text-slate-400 font-bold uppercase">{student.id} | {student.groupName || 'Tổ 1'}</p>
                           </div>
-                          <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-600 transition" />
+                          <div className="flex items-center gap-1 text-slate-400 group-hover:text-blue-600 transition text-[10px] font-bold">
+                            <span className="hidden sm:inline">Tra cứu</span>
+                            <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-600 transition" />
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1383,149 +1494,31 @@ export default function PublicPortal({
                 </div>
               )}
 
-              {/* SINGLE STUDENT DETAILED DASHBOARD CARD */}
+              {/* SINGLE STUDENT DETAILED DASHBOARD CARD & PARENT-TEACHER COMMUNICATION */}
               {selectedStudent && (
-                <div className="space-y-6 animate-fadeIn">
-                  
-                  {/* Back button */}
-                  <button
-                    onClick={() => setSelectedStudent(null)}
-                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-xl text-slate-700 text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    ← Quay lại danh sách tìm kiếm
-                  </button>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
-                    {/* Column 1: Basic Profile */}
-                    <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
-                      <div className="text-center space-y-3 pb-4 border-b border-slate-100">
-                        {selectedStudent.avatarUrl ? (
-                          <img
-                            src={getStudentAvatarUrl(selectedStudent.avatarUrl)}
-                            alt={selectedStudent.name}
-                            className="w-16 h-16 rounded-full mx-auto object-cover border-2 border-blue-200 shadow-sm"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 font-black text-lg mx-auto flex items-center justify-center border-2 border-blue-200 shadow-sm">
-                            {selectedStudent.name.split(' ').pop()?.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-wide">{selectedStudent.name}</h4>
-                          <p className="text-[10px] text-blue-600 font-extrabold uppercase mt-0.5">{selectedStudent.id}</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 text-xs font-medium text-slate-600">
-                        <div className="flex justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-400">Giới tính:</span>
-                          <span className="font-bold text-slate-700">{selectedStudent.gender}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-400">Ngày sinh:</span>
-                          <span className="font-bold text-slate-700">{selectedStudent.dob}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-400">Phân tổ:</span>
-                          <span className="font-bold text-slate-700">{selectedStudent.groupName || 'Tổ 1'}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-400">Trạng thái:</span>
-                          <span className="font-bold text-emerald-600">{selectedStudent.status}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Column 2: Seating grid location */}
-                    <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-                      {renderSeatingChart(selectedStudent)}
-                    </div>
-
-                    {/* Column 3: Tasks and general status */}
-                    <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
-                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100">
-                        Nhiệm vụ được giao & Chuyên cần
-                      </h4>
-
-                      {/* Diligence score summary without private comments */}
-                      {(() => {
-                        const stdViolations = violations.filter(v => v.studentId === selectedStudent.id);
-                        const totalDeducted = stdViolations.reduce((sum, v) => sum + Math.abs(v.points), 0);
-                        const rating = totalDeducted === 0 ? 'Tốt/Xuất sắc' : totalDeducted < 5 ? 'Khá' : 'Cần rèn luyện';
-                        return (
-                          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 text-center space-y-1">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Đánh giá chuyên cần nề nếp</p>
-                            <p className={`text-sm font-black uppercase ${totalDeducted === 0 ? 'text-emerald-600' : totalDeducted < 5 ? 'text-amber-500' : 'text-rose-500'}`}>
-                              {rating} ({100 - totalDeducted} điểm)
-                            </p>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Student Tasks list */}
-                      <div className="space-y-2">
-                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-2">Công việc / Nhiệm vụ tuần</p>
-                        {(() => {
-                          const stdTasks = tasks.filter(t => t.studentId === selectedStudent.id || t.studentId === 'Tất cả');
-                          return stdTasks.length > 0 ? (
-                            <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar pr-1">
-                              {stdTasks.map(t => (
-                                <div key={t.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl text-[10px]">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="font-extrabold text-slate-700 truncate max-w-[120px]">{t.taskTitle}</span>
-                                    <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${
-                                      t.status === 'Đã hoàn thành' ? 'bg-emerald-100 text-emerald-700' : t.status === 'Đang thực hiện' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'
-                                    }`}>{t.status}</span>
-                                  </div>
-                                  <p className="text-slate-400 leading-normal line-clamp-1">{t.description}</p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-slate-400 italic">Hiện tại không có nhiệm vụ cụ thể được giao.</p>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Academic chart panel if student academic updates are found */}
-                  {(() => {
-                    const stdAcademic = academicUpdates.filter(a => a.studentId === selectedStudent.id);
-                    if (stdAcademic.length > 0) {
-                      const sortedAcademic = [...stdAcademic].sort((a, b) => a.date.localeCompare(b.date));
-                      const chartData = sortedAcademic.map(item => ({
-                        name: item.semester,
-                        'ĐTB': parseFloat(item.averageGpa.toFixed(2))
-                      }));
-
-                      return (
-                        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center gap-2">
-                            <TrendingUp size={14} className="text-blue-600" /> Biểu Đồ Tiến Trình Học Tập (Điểm TB)
-                          </h4>
-                          
-                          <div className="h-44 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: -25 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold', fill: '#64748b' }} />
-                                <YAxis domain={[0, 10]} tick={{ fontSize: 10, fontWeight: 'bold', fill: '#64748b' }} />
-                                <Tooltip />
-                                <Line type="monotone" dataKey="ĐTB" stroke="#2563eb" strokeWidth={3} activeDot={{ r: 6 }} />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      );
+                <StudentPortalDetail
+                  student={selectedStudent}
+                  allStudents={students}
+                  currentClass={classes.find(c => c.id === selectedStudent.classId) || currentClass}
+                  teacher={teachers.find(t => t.id === (classes.find(c => c.id === selectedStudent.classId)?.teacherId))}
+                  violations={violations}
+                  tasks={tasks}
+                  academicUpdates={academicUpdates}
+                  plans={plans}
+                  timetable={timetable}
+                  dutySchedule={dutySchedule}
+                  reminderText={reminderText}
+                  announcements={announcements}
+                  albums={propAlbums.length > 0 ? propAlbums : initialAlbums}
+                  onBack={() => setSelectedStudent(null)}
+                  onSelectStudent={(s) => handleInitiateStudentLookup(s)}
+                  onUpdateStudent={(updated) => {
+                    setSelectedStudent(updated);
+                    if (onUpdateStudent) {
+                      onUpdateStudent(updated);
                     }
-                    return null;
-                  })()}
-
-                </div>
+                  }}
+                />
               )}
 
             </div>
@@ -3974,6 +3967,135 @@ export default function PublicPortal({
           initialIndex={slideshowInitialIndex}
           autoPlayInitial={slideshowAutoPlay}
         />
+      )}
+
+      {/* 9. STUDENT / PARENT AUTHENTICATION MODAL */}
+      {isStudentAuthOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fadeIn select-none">
+          <div className="bg-white rounded-[32px] p-6 sm:p-8 max-w-md w-full border border-slate-100 shadow-2xl animate-scaleUp text-slate-800 space-y-6">
+            
+            {/* Header Icon & Title */}
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mx-auto shadow-xs">
+                <ShieldCheck size={28} className="text-blue-600" />
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                Xác thực tra cứu Sổ liên lạc
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                Thông tin học sinh và nề nếp được bảo mật. Phụ huynh & Học sinh vui lòng nhập thông tin xác thực.
+              </p>
+            </div>
+
+            {/* If pending student is known */}
+            {pendingAuthStudent && (
+              <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3.5 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-sm shrink-0">
+                  {pendingAuthStudent.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-black text-blue-950 truncate">{pendingAuthStudent.name}</div>
+                  <div className="text-[11px] text-blue-700 font-bold uppercase">Mã số: {pendingAuthStudent.id}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Login Form */}
+            <form onSubmit={handleStudentAuthSubmit} className="space-y-4 text-left">
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">
+                  Mã học sinh (MAHS) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={authMahsInput}
+                    onChange={(e) => {
+                      setAuthMahsInput(e.target.value);
+                      setAuthError('');
+                    }}
+                    placeholder="Ví dụ: HS01, HS02..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition uppercase"
+                    autoFocus={!pendingAuthStudent}
+                    required
+                  />
+                  <User size={15} className="absolute left-3 top-3 text-slate-400" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">
+                    Mật khẩu truy cập <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
+                    Mặc định: 123
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showAuthPassword ? 'text' : 'password'}
+                    value={authPasswordInput}
+                    onChange={(e) => {
+                      setAuthPasswordInput(e.target.value);
+                      setAuthError('');
+                    }}
+                    placeholder="Nhập mật khẩu..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+                    autoFocus={!!pendingAuthStudent}
+                    required
+                  />
+                  <Key size={15} className="absolute left-3 top-3 text-slate-400" />
+                  <button
+                    type="button"
+                    onClick={() => setShowAuthPassword(!showAuthPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition cursor-pointer p-1"
+                    title={showAuthPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  >
+                    {showAuthPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Note about default password */}
+              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 space-y-1 leading-relaxed">
+                <p className="font-semibold text-slate-700">💡 Hướng dẫn tra cứu:</p>
+                <p>Mật khẩu khởi tạo mặc định là <strong className="text-blue-700">123</strong>. Sau khi đăng nhập, Quý phụ huynh & Học sinh có thể nhấn nút <strong className="text-slate-800">"Đổi mật khẩu"</strong> ngay trên trang cá nhân.</p>
+              </div>
+
+              {/* Error Message */}
+              {authError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-600 font-bold flex items-center gap-2 animate-shake">
+                  <AlertCircle size={16} className="shrink-0 text-rose-500" />
+                  <span>{authError}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStudentAuthOpen(false);
+                    setPendingAuthStudent(null);
+                    setAuthError('');
+                  }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Lock size={13} />
+                  <span>Xác nhận & Xem</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
       )}
 
     </div>
