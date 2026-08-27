@@ -876,7 +876,7 @@ export default function App() {
 
     setStudents(updated);
     if (removed.length === 0) {
-      updated.forEach(s => dbService.saveStudent(s));
+      dbService.saveStudents(updated);
     }
   };
 
@@ -1861,6 +1861,7 @@ export default function App() {
                 activeClassId={activeClassId}
                 className={className}
                 onUpdateStudent={handleUpdateStudent}
+                onUpdateStudents={handleUpdateStudents}
                 isReadOnly={isReadOnly}
                 tasks={tasks}
                 onAddTask={handleAddTask}
