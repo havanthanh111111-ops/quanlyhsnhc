@@ -25,6 +25,22 @@ import {
   PhotoAlbum
 } from '../types';
 
+// Helper to sanitize data by removing undefined properties
+export function cleanData<T extends Record<string, any>>(obj: T): T {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = cleanData(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
 // Helper to check if a collection is empty
 export async function isCollectionEmpty(collectionName: string): Promise<boolean> {
   const querySnapshot = await getDocs(collection(db, collectionName));
@@ -120,7 +136,7 @@ export async function seedFirestore(data: {
 
 // Single item saving helpers
 export async function saveTeacher(item: Teacher) {
-  await setDoc(doc(db, 'teachers', item.id), item);
+  await setDoc(doc(db, 'teachers', item.id), cleanData(item));
 }
 
 export async function deleteTeacher(id: string) {
@@ -128,7 +144,7 @@ export async function deleteTeacher(id: string) {
 }
 
 export async function saveSchoolYear(item: SchoolYear) {
-  await setDoc(doc(db, 'schoolYears', item.id), item);
+  await setDoc(doc(db, 'schoolYears', item.id), cleanData(item));
 }
 
 export async function deleteSchoolYear(id: string) {
@@ -136,7 +152,7 @@ export async function deleteSchoolYear(id: string) {
 }
 
 export async function saveClass(item: ClassItem) {
-  await setDoc(doc(db, 'classes', item.id), item);
+  await setDoc(doc(db, 'classes', item.id), cleanData(item));
 }
 
 export async function deleteClass(id: string) {
@@ -144,7 +160,18 @@ export async function deleteClass(id: string) {
 }
 
 export async function saveStudent(item: Student) {
-  await setDoc(doc(db, 'students', item.id), item);
+  await setDoc(doc(db, 'students', item.id), cleanData(item));
+}
+
+export async function saveStudents(items: Student[]) {
+  if (!items || items.length === 0) return;
+  // Firestore batches support up to 500 operations
+  const batch = writeBatch(db);
+  for (const item of items) {
+    const docRef = doc(db, 'students', item.id);
+    batch.set(docRef, cleanData(item));
+  }
+  await batch.commit();
 }
 
 export async function deleteStudent(id: string) {
@@ -152,7 +179,7 @@ export async function deleteStudent(id: string) {
 }
 
 export async function saveViolation(item: ViolationRecord) {
-  await setDoc(doc(db, 'violations', item.id), item);
+  await setDoc(doc(db, 'violations', item.id), cleanData(item));
 }
 
 export async function deleteViolation(id: string) {
@@ -160,7 +187,7 @@ export async function deleteViolation(id: string) {
 }
 
 export async function saveViolationType(item: ViolationType) {
-  await setDoc(doc(db, 'violationTypes', item.id), item);
+  await setDoc(doc(db, 'violationTypes', item.id), cleanData(item));
 }
 
 export async function deleteViolationType(id: string) {
@@ -168,7 +195,7 @@ export async function deleteViolationType(id: string) {
 }
 
 export async function savePlan(item: WeeklyPlan) {
-  await setDoc(doc(db, 'plans', item.id), item);
+  await setDoc(doc(db, 'plans', item.id), cleanData(item));
 }
 
 export async function deletePlan(id: string) {
@@ -176,7 +203,7 @@ export async function deletePlan(id: string) {
 }
 
 export async function saveTask(item: StudentTask) {
-  await setDoc(doc(db, 'tasks', item.id), item);
+  await setDoc(doc(db, 'tasks', item.id), cleanData(item));
 }
 
 export async function deleteTask(id: string) {
@@ -184,7 +211,7 @@ export async function deleteTask(id: string) {
 }
 
 export async function saveAcademicUpdate(item: AcademicUpdate) {
-  await setDoc(doc(db, 'academicUpdates', item.id), item);
+  await setDoc(doc(db, 'academicUpdates', item.id), cleanData(item));
 }
 
 export async function deleteAcademicUpdate(id: string) {
@@ -192,7 +219,7 @@ export async function deleteAcademicUpdate(id: string) {
 }
 
 export async function saveUser(item: SystemUser) {
-  await setDoc(doc(db, 'users', item.id), item);
+  await setDoc(doc(db, 'users', item.id), cleanData(item));
 }
 
 export async function deleteUser(id: string) {
@@ -200,11 +227,11 @@ export async function deleteUser(id: string) {
 }
 
 export async function saveGlobalSettings(settings: { adminPin: string; config: SheetSyncConfig }) {
-  await setDoc(doc(db, 'settings', 'global'), settings);
+  await setDoc(doc(db, 'settings', 'global'), cleanData(settings));
 }
 
 export async function saveAnnouncement(item: Announcement) {
-  await setDoc(doc(db, 'announcements', item.id), item);
+  await setDoc(doc(db, 'announcements', item.id), cleanData(item));
 }
 
 export async function deleteAnnouncement(id: string) {
@@ -212,11 +239,11 @@ export async function deleteAnnouncement(id: string) {
 }
 
 export async function saveTimetable(classId: string, cells: any[]) {
-  await setDoc(doc(db, 'timetables', classId), { classId, cells });
+  await setDoc(doc(db, 'timetables', classId), cleanData({ classId, cells }));
 }
 
 export async function saveReminder(classId: string, date: string, text: string) {
-  await setDoc(doc(db, 'reminders', `${classId}_${date}`), { classId, date, text });
+  await setDoc(doc(db, 'reminders', `${classId}_${date}`), cleanData({ classId, date, text }));
 }
 
 export async function deleteReminder(classId: string, date: string) {
@@ -224,15 +251,15 @@ export async function deleteReminder(classId: string, date: string) {
 }
 
 export async function saveParticipation(classId: string, date: string, data: Record<string, number>) {
-  await setDoc(doc(db, 'participations', `${classId}_${date}`), { classId, date, data });
+  await setDoc(doc(db, 'participations', `${classId}_${date}`), cleanData({ classId, date, data }));
 }
 
 export async function saveDuty(classId: string, weekNumber: number, schedule: any) {
-  await setDoc(doc(db, 'duties', `${classId}_week_${weekNumber}`), { classId, weekNumber, schedule });
+  await setDoc(doc(db, 'duties', `${classId}_week_${weekNumber}`), cleanData({ classId, weekNumber, schedule }));
 }
 
 export async function saveDocumentCategory(item: DocumentCategory) {
-  await setDoc(doc(db, 'documentCategories', item.id), item);
+  await setDoc(doc(db, 'documentCategories', item.id), cleanData(item));
 }
 
 export async function deleteDocumentCategory(id: string) {
@@ -240,7 +267,7 @@ export async function deleteDocumentCategory(id: string) {
 }
 
 export async function saveAlbum(item: PhotoAlbum) {
-  await setDoc(doc(db, 'albums', item.id), item);
+  await setDoc(doc(db, 'albums', item.id), cleanData(item));
 }
 
 export async function deleteAlbum(id: string) {
@@ -251,7 +278,7 @@ export async function saveAlbums(items: PhotoAlbum[]) {
   const batch = writeBatch(db);
   for (const item of items) {
     const docRef = doc(db, 'albums', item.id);
-    batch.set(docRef, item);
+    batch.set(docRef, cleanData(item));
   }
   await batch.commit();
 }
