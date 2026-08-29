@@ -1509,7 +1509,7 @@ export default function PublicPortal({
                   dutySchedule={dutySchedule}
                   reminderText={reminderText}
                   announcements={announcements}
-                  albums={propAlbums.length > 0 ? propAlbums : initialAlbums}
+                  albums={propAlbums}
                   onBack={() => setSelectedStudent(null)}
                   onSelectStudent={(s) => handleInitiateStudentLookup(s)}
                   onUpdateStudent={(updated) => {
@@ -2567,7 +2567,7 @@ export default function PublicPortal({
                           </div>
 
                           {/* Seating Grid Map */}
-                          <div className="w-full overflow-auto custom-scrollbar max-h-[500px] pb-2">
+                          <div className="w-full overflow-auto custom-scrollbar max-h-[750px] pb-4">
                             <div 
                               className="grid gap-3.5 mx-auto"
                               style={{
@@ -3506,7 +3506,7 @@ export default function PublicPortal({
 
               {/* Albums Content & Filter */}
               {(() => {
-                const effectiveAlbums = (propAlbums && propAlbums.length > 0) ? propAlbums : (initialAlbums || []);
+                const effectiveAlbums = propAlbums || [];
                 const publishedAlbums = effectiveAlbums.filter(a => a.isPublished !== false);
 
                 // Available categories
