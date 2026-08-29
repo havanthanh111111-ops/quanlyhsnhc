@@ -511,11 +511,9 @@ export default function App() {
           handleFirstConnection();
           const list: PhotoAlbum[] = [];
           snap.forEach(doc => list.push(doc.data() as PhotoAlbum));
-          if (list.length > 0) {
-            list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-            setAlbums(list);
-            localStorage.setItem('app_albums', JSON.stringify(list));
-          }
+          list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          setAlbums(list);
+          localStorage.setItem('app_albums', JSON.stringify(list));
         }, (err) => {
           console.error('Lỗi subscription albums:', err);
           if (!hasConnected) setDbError(err?.message || String(err));
