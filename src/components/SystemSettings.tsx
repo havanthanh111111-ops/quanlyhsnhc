@@ -714,9 +714,10 @@ export default function SystemSettings({
         triggerMessage(`Mã lỗi "${id}" đã tồn tại ở hành vi khác!`, true);
         return;
       }
+      const safePoints = Math.min(100, Math.max(0, newViolationPoints));
       const updated = violationTypes.map(vt => 
         vt.id === editingViolationTypeId 
-          ? { id, label, defaultPoints: -Math.abs(newViolationPoints) }
+          ? { id, label, defaultPoints: safePoints === 0 ? 0 : -Math.abs(safePoints) }
           : vt
       );
       onUpdateViolationTypes(updated);
@@ -727,10 +728,11 @@ export default function SystemSettings({
         triggerMessage(`Mã lỗi "${id}" đã tồn tại!`, true);
         return;
       }
+      const safePoints = Math.min(100, Math.max(0, newViolationPoints));
       const newType: ViolationType = {
         id,
         label,
-        defaultPoints: -Math.abs(newViolationPoints) // Ensure negative subtraction
+        defaultPoints: safePoints === 0 ? 0 : -Math.abs(safePoints) // Ensure negative subtraction or 0
       };
       onUpdateViolationTypes([...violationTypes, newType]);
       triggerMessage(`Đã thêm lỗi vi phạm "${label}"`);
@@ -1491,17 +1493,33 @@ export default function SystemSettings({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 block">Số điểm trừ mặc định</label>
+                <label className="text-[10px] uppercase tracking-widest text-white/40 block">Số điểm trừ mặc định (0 - 100)</label>
                 <input
                   id="settings-violation-points"
                   type="number"
-                  min="1"
-                  max="10"
+                  min="0"
+                  max="100"
                   value={newViolationPoints}
-                  onChange={(e) => setNewViolationPoints(parseInt(e.target.value) || 1)}
+                  onChange={(e) => {
+                    const rawVal = e.target.value;
+                    if (rawVal === '') {
+                      setNewViolationPoints(0);
+                    } else {
+                      const parsed = parseInt(rawVal, 10);
+                      if (isNaN(parsed)) {
+                        setNewViolationPoints(0);
+                      } else {
+                        setNewViolationPoints(Math.min(100, Math.max(0, parsed)));
+                      }
+                    }
+                  }}
                   className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 font-mono"
                 />
-                <span className="text-[10px] text-rose-400 italic">Hệ thống sẽ trừ {newViolationPoints} điểm khi học sinh mắc lỗi này.</span>
+                <span className="text-[10px] text-rose-400 italic">
+                  {newViolationPoints === 0 
+                    ? 'Hành vi này không bị trừ điểm (0 điểm).' 
+                    : `Hệ thống sẽ trừ ${newViolationPoints} điểm khi học sinh mắc lỗi này.`}
+                </span>
               </div>
 
               <div className="flex gap-2">
