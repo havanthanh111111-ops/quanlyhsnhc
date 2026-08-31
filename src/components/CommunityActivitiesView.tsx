@@ -17,6 +17,7 @@ import {
 } from '../data/communityActivityDefaults';
 import { db, doc, onSnapshot, setDoc } from '../lib/firebase';
 import { saveCommunityRecord } from '../lib/dbService';
+import CommunityActivitiesPdfModal from './CommunityActivitiesPdfModal';
 import { 
   Award, 
   CheckCircle2, 
@@ -39,6 +40,7 @@ import {
   RefreshCw, 
   Flame,
   HelpCircle,
+  Lock,
   X
 } from 'lucide-react';
 
@@ -78,6 +80,7 @@ export default function CommunityActivitiesView({
 
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
 
   // New sport activity addition modal state
   const [isAddSportModalOpen, setIsAddSportModalOpen] = useState<boolean>(false);
@@ -150,10 +153,18 @@ export default function CommunityActivitiesView({
     return totalCommunityConfirmedHours;
   }, [totalCommunityConfirmedHours]);
 
+  const isStudentMode = mode === 'student';
+
   // Handlers for Table 1 (Community activities)
   const handleUpdateCommunityEntry = (stt: number, field: keyof CommunityActivityEntry, value: any) => {
     if (isReadOnly) return;
     setRecord(prev => {
+      // Freeze protection: If student mode and row is approved/confirmed, do not allow changes
+      const existing = (prev.entries || []).find(e => e.stt === stt);
+      if (isStudentMode && existing?.isConfirmed) {
+        return prev;
+      }
+
       const updatedEntries = (prev.entries || []).map(entry => {
         if (entry.stt === stt) {
           return { ...entry, [field]: value };
@@ -168,6 +179,11 @@ export default function CommunityActivitiesView({
   const handleSyncSportsToItem7 = () => {
     if (isReadOnly) return;
     setRecord(prev => {
+      const existingItem7 = (prev.entries || []).find(e => e.stt === 7);
+      if (isStudentMode && existingItem7?.isConfirmed) {
+        return prev; // Item 7 is confirmed and frozen for student
+      }
+
       const updatedEntries = (prev.entries || []).map(entry => {
         if (entry.stt === 7) {
           const hasConfirmed = totalSportConfirmedHours > 0;
@@ -188,6 +204,12 @@ export default function CommunityActivitiesView({
   const handleUpdateSportItem = (id: string, field: keyof SportArtActivityItem, value: any) => {
     if (isReadOnly) return;
     setRecord(prev => {
+      // Freeze protection: If student mode and sport item is approved, block changes
+      const existing = (prev.sportArtItems || []).find(s => s.id === id);
+      if (isStudentMode && existing?.isConfirmed) {
+        return prev;
+      }
+
       const updatedSports = (prev.sportArtItems || []).map(item => {
         if (item.id === id) {
           return { ...item, [field]: value };
@@ -224,10 +246,17 @@ export default function CommunityActivitiesView({
 
   const handleDeleteSportItem = (id: string) => {
     if (isReadOnly) return;
-    setRecord(prev => ({
-      ...prev,
-      sportArtItems: (prev.sportArtItems || []).filter(item => item.id !== id)
-    }));
+    setRecord(prev => {
+      // Freeze protection for student mode
+      const existing = (prev.sportArtItems || []).find(s => s.id === id);
+      if (isStudentMode && existing?.isConfirmed) {
+        return prev;
+      }
+      return {
+        ...prev,
+        sportArtItems: (prev.sportArtItems || []).filter(item => item.id !== id)
+      };
+    });
   };
 
   // Batch confirmation for Admin
@@ -278,8 +307,6 @@ export default function CommunityActivitiesView({
       setIsSaving(false);
     }
   };
-
-  const isStudentMode = mode === 'student';
 
   return (
     <div className="space-y-6 animate-fadeIn text-slate-800">
@@ -351,6 +378,17 @@ export default function CommunityActivitiesView({
                 </span>
               </div>
             </div>
+
+            {/* Nút Xuất PDF Trình BGH */}
+            <button
+              type="button"
+              onClick={() => setIsPdfModalOpen(true)}
+              className="px-4 py-3 rounded-2xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-md bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-slate-200/50 active:scale-95"
+              title="Xuất mẫu văn bản bảng hoạt động kẻ bảng trình BGH có để trống chữ ký"
+            >
+              <Printer size={16} className="text-blue-600" />
+              <span>Xuất PDF (Trình BGH)</span>
+            </button>
 
             <button
               type="button"
@@ -517,20 +555,23 @@ export default function CommunityActivitiesView({
                 {(record.entries || []).map((entry) => {
                   const isChecked = entry.isConfirmed;
                   const isItem7 = entry.stt === 7;
+                  const isRowFrozen = isStudentMode && isChecked;
 
                   return (
                     <tr 
                       key={entry.stt}
                       className={`transition ${
                         isStudentMode 
-                          ? isChecked ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-slate-50/80' 
+                          ? isChecked ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'hover:bg-slate-50/80' 
                           : isChecked ? 'bg-emerald-500/5 hover:bg-emerald-500/10' : 'hover:bg-white/[0.02]'
                       }`}
                     >
                       {/* STT */}
                       <td className="py-4 px-3 text-center font-black">
                         <span className={`inline-block w-6 h-6 rounded-full text-center leading-6 text-xs ${
-                          isStudentMode ? 'bg-slate-100 text-slate-800' : 'bg-white/10 text-white'
+                          isStudentMode 
+                            ? isChecked ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-800' 
+                            : 'bg-white/10 text-white'
                         }`}>
                           {entry.stt}
                         </span>
@@ -539,11 +580,18 @@ export default function CommunityActivitiesView({
                       {/* NỘI DUNG CÔNG VIỆC */}
                       <td className="py-4 px-4 align-top">
                         <div className="space-y-1.5">
-                          <p className={`font-black text-xs sm:text-sm ${
-                            isStudentMode ? 'text-slate-900' : 'text-white'
-                          }`}>
-                            {entry.title}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-black text-xs sm:text-sm ${
+                              isStudentMode ? 'text-slate-900' : 'text-white'
+                            }`}>
+                              {entry.title}
+                            </p>
+                            {isRowFrozen && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                🔒 Đã duyệt - Đóng băng
+                              </span>
+                            )}
+                          </div>
                           <p className={`text-[11px] whitespace-pre-line leading-relaxed ${
                             isStudentMode ? 'text-slate-500' : 'text-white/50'
                           }`}>
@@ -565,17 +613,24 @@ export default function CommunityActivitiesView({
                         <textarea
                           rows={3}
                           value={entry.studentNote || ''}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || isRowFrozen}
                           onChange={(e) => handleUpdateCommunityEntry(entry.stt, 'studentNote', e.target.value)}
                           placeholder={isItem7 
                             ? "Diễn giải các hoạt động văn nghệ, thể thao đã tham gia (hoặc nhập tự động từ Bảng 2)..." 
                             : "Học sinh tự diễn giải nội dung chi tiết và số giờ tham gia..."}
                           className={`w-full text-xs rounded-xl p-3 focus:outline-none transition resize-y ${
                             isStudentMode 
-                              ? 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 placeholder-slate-400' 
+                              ? isRowFrozen
+                                ? 'bg-slate-100/90 border border-slate-200 text-slate-700 cursor-not-allowed font-medium'
+                                : 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 placeholder-slate-400' 
                               : 'bg-[#0a0a0a] border border-white/10 text-white focus:border-amber-500 placeholder-white/20'
-                          } disabled:opacity-60`}
+                          } disabled:opacity-80`}
                         />
+                        {isRowFrozen && (
+                          <span className="text-[10px] text-emerald-700 italic block mt-1">
+                            * Mục này đã được giáo viên duyệt. Học sinh không thể chỉnh sửa điểm và nội dung.
+                          </span>
+                        )}
                       </td>
 
                       {/* TỔNG GIỜ */}
@@ -587,7 +642,7 @@ export default function CommunityActivitiesView({
                             max="500"
                             step="0.5"
                             value={entry.hours === 0 ? '' : entry.hours}
-                            disabled={isReadOnly}
+                            disabled={isReadOnly || isRowFrozen}
                             onChange={(e) => {
                               const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                               handleUpdateCommunityEntry(entry.stt, 'hours', Math.max(0, val));
@@ -595,9 +650,11 @@ export default function CommunityActivitiesView({
                             placeholder="0"
                             className={`w-20 text-center font-black font-mono py-2 rounded-xl text-sm focus:outline-none transition ${
                               isStudentMode 
-                                ? 'bg-slate-50 border border-slate-200 text-slate-900 focus:border-blue-600 focus:bg-white' 
+                                ? isRowFrozen
+                                  ? 'bg-slate-100 border border-slate-300 text-emerald-800 cursor-not-allowed'
+                                  : 'bg-slate-50 border border-slate-200 text-slate-900 focus:border-blue-600 focus:bg-white' 
                                 : 'bg-[#0a0a0a] border border-white/10 text-amber-400 focus:border-amber-500'
-                            } disabled:opacity-60`}
+                            } disabled:opacity-90`}
                           />
                           <span className="text-[10px] text-slate-400">giờ</span>
                         </div>
@@ -786,13 +843,14 @@ export default function CommunityActivitiesView({
                 {(record.sportArtItems || []).map((item, index) => {
                   const isChecked = item.isConfirmed;
                   const hasHours = (Number(item.hours) || 0) > 0;
+                  const isSportFrozen = isStudentMode && isChecked;
 
                   return (
                     <tr 
                       key={item.id}
                       className={`transition ${
                         isStudentMode 
-                          ? isChecked ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : hasHours ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/60' 
+                          ? isChecked ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : hasHours ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/60' 
                           : isChecked ? 'bg-emerald-500/5 hover:bg-emerald-500/10' : hasHours ? 'bg-amber-500/5' : 'hover:bg-white/[0.02]'
                       }`}
                     >
@@ -803,28 +861,37 @@ export default function CommunityActivitiesView({
 
                       {/* TÊN HOẠT ĐỘNG */}
                       <td className="py-3 px-4 font-bold">
-                        <input
-                          type="text"
-                          value={item.name}
-                          disabled={isReadOnly}
-                          onChange={(e) => handleUpdateSportItem(item.id, 'name', e.target.value)}
-                          className={`w-full bg-transparent font-bold focus:outline-none ${
-                            isStudentMode ? 'text-slate-800' : 'text-white'
-                          }`}
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={item.name}
+                            disabled={isReadOnly || isSportFrozen}
+                            onChange={(e) => handleUpdateSportItem(item.id, 'name', e.target.value)}
+                            className={`w-full bg-transparent font-bold focus:outline-none ${
+                              isStudentMode ? 'text-slate-800' : 'text-white'
+                            } disabled:opacity-80`}
+                          />
+                          {isSportFrozen && (
+                            <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded">
+                              🔒 Đã duyệt
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* HÌNH THỨC: THAM GIA / CỔ VŨ */}
                       <td className="py-3 px-3 text-center">
                         <select
                           value={item.role || 'Tham gia'}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || isSportFrozen}
                           onChange={(e) => handleUpdateSportItem(item.id, 'role', e.target.value)}
                           className={`text-xs rounded-xl px-2.5 py-1.5 font-bold focus:outline-none transition cursor-pointer ${
                             isStudentMode 
-                              ? 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-600' 
+                              ? isSportFrozen
+                                ? 'bg-slate-100 border border-slate-300 text-slate-700 cursor-not-allowed'
+                                : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-600' 
                               : 'bg-[#0a0a0a] border border-white/10 text-white focus:border-amber-500'
-                          } disabled:opacity-60`}
+                          } disabled:opacity-80`}
                         >
                           <option value="Tham gia">🏃 Tham gia</option>
                           <option value="Cổ vũ">📣 Cổ vũ</option>
@@ -838,14 +905,16 @@ export default function CommunityActivitiesView({
                         <input
                           type="text"
                           value={item.achievement || ''}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || isSportFrozen}
                           onChange={(e) => handleUpdateSportItem(item.id, 'achievement', e.target.value)}
                           placeholder="VD: Tham gia, Vòng bảng, Giải Ba, Khuyến khích..."
                           className={`w-full text-xs rounded-xl px-3 py-1.5 focus:outline-none transition ${
                             isStudentMode 
-                              ? 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-blue-600' 
+                              ? isSportFrozen
+                                ? 'bg-slate-100 border border-slate-300 text-slate-700 cursor-not-allowed'
+                                : 'bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:border-blue-600' 
                               : 'bg-[#0a0a0a] border border-white/10 text-white focus:border-amber-500'
-                          } disabled:opacity-60`}
+                          } disabled:opacity-80`}
                         />
                       </td>
 
@@ -857,7 +926,7 @@ export default function CommunityActivitiesView({
                           max="100"
                           step="0.5"
                           value={item.hours === 0 ? '' : item.hours}
-                          disabled={isReadOnly}
+                          disabled={isReadOnly || isSportFrozen}
                           onChange={(e) => {
                             const val = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
                             handleUpdateSportItem(item.id, 'hours', Math.max(0, val));
@@ -865,9 +934,11 @@ export default function CommunityActivitiesView({
                           placeholder="0"
                           className={`w-16 text-center font-bold font-mono py-1.5 rounded-xl text-xs focus:outline-none transition ${
                             isStudentMode 
-                              ? 'bg-slate-50 border border-slate-200 text-slate-900 focus:border-blue-600 focus:bg-white' 
+                              ? isSportFrozen
+                                ? 'bg-slate-100 border border-slate-300 text-emerald-800 cursor-not-allowed'
+                                : 'bg-slate-50 border border-slate-200 text-slate-900 focus:border-blue-600 focus:bg-white' 
                               : 'bg-[#0a0a0a] border border-white/10 text-amber-400 focus:border-amber-500'
-                          } disabled:opacity-60`}
+                          } disabled:opacity-90`}
                         />
                       </td>
 
@@ -933,7 +1004,7 @@ export default function CommunityActivitiesView({
 
                       {/* XÓA HOẠT ĐỘNG */}
                       <td className="py-3 px-2 text-center">
-                        {!isReadOnly && (
+                        {!isReadOnly && !isSportFrozen && (
                           <button
                             type="button"
                             onClick={() => handleDeleteSportItem(item.id)}
@@ -1137,6 +1208,14 @@ export default function CommunityActivitiesView({
           </div>
         </div>
       )}
+
+      {/* PDF Export & Print Document Modal */}
+      <CommunityActivitiesPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        student={student}
+        record={record}
+      />
 
     </div>
   );
