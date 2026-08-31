@@ -93,14 +93,17 @@
   #student-report-print-preview,
   #student-report-print-preview *,
   #report-print-preview,
-  #report-print-preview * {
+  #report-print-preview *,
+  #community-activities-print-sheet,
+  #community-activities-print-sheet * {
     visibility: visible !important;
   }
 
   /* Position the print target perfectly */
   #weekly-plan-print-preview,
   #student-report-print-preview,
-  #report-print-preview {
+  #report-print-preview,
+  #community-activities-print-sheet {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
