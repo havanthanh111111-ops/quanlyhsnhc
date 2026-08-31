@@ -37,8 +37,12 @@ import {
   X,
   UserPlus,
   ArrowRightLeft,
-  Filter
+  Filter,
+  Award,
+  CheckSquare,
+  Square
 } from 'lucide-react';
+import CommunityActivitiesView from './CommunityActivitiesView';
 
 const getStudentAvatarUrl = (avatarUrl: string | undefined): string => {
   return normalizeImageUrl(avatarUrl);
@@ -93,8 +97,10 @@ export default function ClassManager({
   onUpdateTask,
   onDeleteTask
 }: ClassManagerProps) {
-  const [subTab, setSubTab] = useState<'groups' | 'seating' | 'timetable' | 'reminders' | 'duty'>('groups');
+  const [subTab, setSubTab] = useState<'groups' | 'seating' | 'timetable' | 'reminders' | 'duty' | 'activities'>('groups');
   const [remindersSubTab, setRemindersSubTab] = useState<'reminders' | 'participation'>('reminders');
+  const [selectedActivityStudentId, setSelectedActivityStudentId] = useState<string>('');
+  const [activitySearchQuery, setActivitySearchQuery] = useState<string>('');
 
   // Selected date for "Dặn dò hàng ngày" and "Bảng theo dõi học tập"
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -743,7 +749,8 @@ export default function ClassManager({
           { id: 'seating', label: 'Sơ đồ Ghế ngồi', icon: Grid },
           { id: 'timetable', label: 'Thời khóa biểu Tuần', icon: Calendar },
           { id: 'reminders', label: 'Dặn dò & Học tập', icon: FileText },
-          { id: 'duty', label: 'Phân công Trực nhật', icon: ClipboardList }
+          { id: 'duty', label: 'Phân công Trực nhật', icon: ClipboardList },
+          { id: 'activities', label: 'Hoạt động & Công tác xã hội', icon: Award }
         ].map(item => {
           const Icon = item.icon;
           const isSelected = subTab === item.id;
@@ -2701,6 +2708,174 @@ export default function ClassManager({
               </div>
             );
           })()}
+
+          {/* ======================= HOẠT ĐỘNG & CÔNG TÁC XÃ HỘI ======================= */}
+          {subTab === 'activities' && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Header / Intro */}
+              <div className="bg-[#111] p-5 rounded-3xl border border-white/5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] font-black uppercase">
+                      QUẢN LÝ HOẠT ĐỘNG LỚP {className}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-white">Ghi nhận Hoạt động vì cộng đồng & Ngoại khóa (Cả năm)</h3>
+                  <p className="text-xs text-white/50 max-w-2xl mt-0.5">
+                    Kiểm tra các nội dung do học sinh tự khai, click vào ô checkbox để xác nhận số giờ tham gia, ký tên đánh giá và nhận xét xếp loại cuối năm.
+                  </p>
+                </div>
+
+                {selectedActivityStudentId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedActivityStudentId('')}
+                    className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 border border-white/10 cursor-pointer w-fit"
+                  >
+                    <ChevronRight size={14} className="rotate-180" /> Quay lại danh sách lớp
+                  </button>
+                )}
+              </div>
+
+              {/* VIEW 1: STUDENT SELECTION LIST (IF NO SPECIFIC STUDENT SELECTED) */}
+              {!selectedActivityStudentId ? (
+                <div className="space-y-4">
+                  {/* Search and Filters */}
+                  <div className="bg-[#141414] p-3.5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center gap-3">
+                    <div className="relative flex-1 w-full">
+                      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+                      <input
+                        type="text"
+                        value={activitySearchQuery}
+                        onChange={(e) => setActivitySearchQuery(e.target.value)}
+                        placeholder="Tìm kiếm học sinh theo tên, mã số, tổ..."
+                        className="w-full bg-[#0a0a0a] border border-white/5 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-amber-500/50"
+                      />
+                    </div>
+                    <div className="text-xs text-white/40 font-semibold shrink-0">
+                      Sĩ số: <strong className="text-amber-400">{classStudents.length}</strong> học sinh
+                    </div>
+                  </div>
+
+                  {/* Student Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {classStudents
+                      .filter(s => {
+                        if (!activitySearchQuery.trim()) return true;
+                        const q = removeVietnameseTones(activitySearchQuery);
+                        const matchName = removeVietnameseTones(s.name).includes(q);
+                        const matchId = removeVietnameseTones(s.id).includes(q);
+                        const matchGroup = removeVietnameseTones(s.groupName || '').includes(q);
+                        return matchName || matchId || matchGroup;
+                      })
+                      .map(student => {
+                        const localKey = `app_community_record_${student.id}`;
+                        let declaredHours = 0;
+                        let confirmedHours = 0;
+                        let rating = 'Chưa đánh giá';
+                        try {
+                          const local = localStorage.getItem(localKey);
+                          if (local) {
+                            const parsed = JSON.parse(local);
+                            if (parsed && Array.isArray(parsed.entries)) {
+                              declaredHours = parsed.entries.reduce((sum: number, e: any) => sum + (Number(e.hours) || 0), 0);
+                              confirmedHours = parsed.entries.filter((e: any) => e.isConfirmed).reduce((sum: number, e: any) => sum + (Number(e.hours) || 0), 0);
+                              rating = parsed.evaluationRating || 'Đạt';
+                            }
+                          }
+                        } catch (e) {}
+
+                        return (
+                          <div
+                            key={student.id}
+                            onClick={() => setSelectedActivityStudentId(student.id)}
+                            className="p-4 bg-[#111] hover:bg-[#161616] border border-white/5 hover:border-amber-500/40 rounded-2xl transition cursor-pointer flex flex-col justify-between gap-3 group shadow-xs"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/5 shrink-0 border border-white/10 flex items-center justify-center text-white/40">
+                                {student.avatarUrl ? (
+                                  <img 
+                                    src={normalizeImageUrl(student.avatarUrl)} 
+                                    alt={student.name} 
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <User size={18} />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <h4 className="text-xs font-bold text-white group-hover:text-amber-400 transition truncate">
+                                  {student.name}
+                                </h4>
+                                <p className="text-[10px] text-white/40 font-mono">
+                                  {student.id} • {student.groupName || 'Chưa phân tổ'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px]">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white/40 text-[10px]">Tự khai: <strong className="text-white">{declaredHours}h</strong></span>
+                                <span className="text-white/20">•</span>
+                                <span className="text-emerald-400 font-bold text-[10px]">Duyệt: {confirmedHours}h</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-amber-500 font-bold text-[10px] group-hover:translate-x-0.5 transition">
+                                <span>Kiểm tra</span>
+                                <ChevronRight size={12} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ) : (
+                /* VIEW 2: ACTIVE STUDENT COMMUNITY ACTIVITIES DETAIL VIEW */
+                (() => {
+                  const currentStudent = classStudents.find(s => s.id === selectedActivityStudentId);
+                  if (!currentStudent) {
+                    return (
+                      <div className="p-8 text-center text-white/40">
+                        Không tìm thấy thông tin học sinh được chọn.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Fast Student Switcher Bar */}
+                      <div className="bg-[#141414] p-3 rounded-2xl border border-white/10 flex items-center justify-between gap-3 overflow-x-auto">
+                        <span className="text-xs font-bold text-white/60 shrink-0">Chuyển nhanh học sinh:</span>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={selectedActivityStudentId}
+                            onChange={(e) => setSelectedActivityStudentId(e.target.value)}
+                            className="bg-[#0a0a0a] border border-white/10 text-white rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+                          >
+                            {classStudents.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.id} - {s.name} ({s.groupName || 'Tổ 1'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Render Dedicated Activities View in Admin Mode */}
+                      <CommunityActivitiesView 
+                        student={currentStudent}
+                        allStudents={students}
+                        mode="admin"
+                        isReadOnly={isReadOnly}
+                        onStudentChange={(s) => onUpdateStudent(s)}
+                      />
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
         </>
       )}
 
