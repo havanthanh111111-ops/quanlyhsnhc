@@ -22,7 +22,8 @@ import {
   SystemUser,
   Announcement,
   DocumentCategory,
-  PhotoAlbum
+  PhotoAlbum,
+  StudentCommunityRecord
 } from '../types';
 
 // Helper to sanitize data by removing undefined properties
@@ -282,4 +283,25 @@ export async function saveAlbums(items: PhotoAlbum[]) {
   }
   await batch.commit();
 }
+
+export async function saveCommunityRecord(record: StudentCommunityRecord) {
+  const sanitized = cleanData({
+    ...record,
+    updatedAt: new Date().toISOString()
+  });
+  await setDoc(doc(db, 'communityActivities', record.studentId), sanitized);
+  try {
+    localStorage.setItem(`app_community_record_${record.studentId}`, JSON.stringify(sanitized));
+  } catch (e) {
+    console.warn('LocalStorage error:', e);
+  }
+}
+
+export async function deleteCommunityRecord(studentId: string) {
+  await deleteDoc(doc(db, 'communityActivities', studentId));
+  try {
+    localStorage.removeItem(`app_community_record_${studentId}`);
+  } catch (e) {}
+}
+
 
