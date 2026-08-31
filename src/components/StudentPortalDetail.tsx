@@ -53,6 +53,7 @@ import {
 } from '../types';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { db, doc, onSnapshot, setDoc, getDoc } from '../lib/firebase';
+import CommunityActivitiesView from './CommunityActivitiesView';
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -104,6 +105,7 @@ export default function StudentPortalDetail({
 }: StudentPortalDetailProps) {
   // Navigation tabs within the student portal
   const [activePortalTab, setActivePortalTab] = useState<'profile' | 'diligence' | 'academics' | 'activities' | 'communication' | 'custom'>('profile');
+  const [activitySubTab, setActivitySubTab] = useState<'community_records' | 'class_events'>('community_records');
 
   // Password Change Modal State
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState<boolean>(false);
@@ -290,7 +292,7 @@ export default function StudentPortalDetail({
     { id: 'profile', label: '1. Thông tin học sinh', icon: User, desc: 'Hồ sơ cá nhân, gia đình & vị trí lớp' },
     { id: 'diligence', label: '2. Chuyên cần & Nề nếp', icon: ShieldAlert, desc: 'Điểm rèn luyện, vi phạm & nhiệm vụ tuần' },
     { id: 'academics', label: '3. Thông tin học tập', icon: BookOpen, desc: 'Bảng điểm chi tiết, ĐTB & tiến trình' },
-    { id: 'activities', label: '4. Phong trào & Tập thể', icon: Sparkles, desc: 'Hoạt động đoàn đội, kỷ niệm & kế hoạch' },
+    { id: 'activities', label: '4. Công tác xã hội & Ngoại khóa', icon: Award, desc: 'Ghi nhận giờ CTXH, thể thao & phong trào' },
     { id: 'communication', label: '5. Kênh liên hệ GVCN', icon: Phone, desc: 'Hotline, dặn dò & thông tin giáo viên' },
     { id: 'custom', label: '6. Mở rộng khác', icon: Layers, desc: 'Các tiện ích & thông tin bổ trợ' },
   ] as const;
@@ -1004,127 +1006,168 @@ export default function StudentPortalDetail({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: HOẠT ĐỘNG PHONG TRÀO & TẬP THỂ */}
+      {/* TAB 4: HOẠT ĐỘNG PHONG TRÀO & CÔNG TÁC XÃ HỘI */}
       {/* ========================================================================= */}
       {activePortalTab === 'activities' && (
         <div className="space-y-6 animate-fadeIn">
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Left: Class Announcements & Movement Events */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <Sparkles size={18} className="text-amber-500" />
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Hoạt động phong trào & Thi đua lớp
-                </h3>
-              </div>
-
-              {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').length > 0 ? (
-                <div className="space-y-3">
-                  {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').map(ann => (
-                    <div key={ann.id} className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 font-black text-[9px] rounded-full uppercase">
-                          {ann.category}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-semibold">{ann.date}</span>
-                      </div>
-                      <h4 className="font-black text-slate-800 text-xs">{ann.title}</h4>
-                      {ann.content && (
-                        <p className="text-slate-500 text-[11px] leading-relaxed line-clamp-3">{ann.content}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl text-slate-400 text-xs font-semibold">
-                  Chưa có thông báo phong trào mới.
-                </div>
-              )}
-            </div>
-
-            {/* Right: Weekly Direction & Collective Objectives */}
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <Award size={18} className="text-blue-600" />
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Định hướng tuần & Phong trào rèn luyện
-                </h3>
-              </div>
-
-              {plans.length > 0 ? (
-                <div className="space-y-3">
-                  {plans.slice(0, 3).map(p => (
-                    <div key={p.id} className="p-4 bg-blue-50/40 border border-blue-100 rounded-2xl space-y-2 text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="font-black text-blue-900 text-xs">Tuần {p.weekNumber}: {p.title}</span>
-                        <span className="text-[10px] text-blue-600 font-bold">{p.dateRange}</span>
-                      </div>
-                      {p.objectives && (
-                        <div className="bg-white/80 p-2.5 rounded-xl border border-blue-200/50 text-[11px] text-slate-700">
-                          <strong>Mục tiêu tuần:</strong> {p.objectives}
-                        </div>
-                      )}
-                      {p.teacherNotes && (
-                        <p className="text-[11px] text-slate-500">
-                          <strong>Lời nhắn GV:</strong> {p.teacherNotes}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-center bg-slate-50 rounded-2xl text-slate-400 text-xs font-semibold">
-                  Chưa có kế hoạch tuần được phân công.
-                </div>
-              )}
-            </div>
-
+          {/* Sub-tab Navigation */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl max-w-xl mx-auto border border-slate-200/60 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActivitySubTab('community_records')}
+              className={`flex-1 py-2.5 px-3 text-xs font-bold rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1.5 ${
+                activitySubTab === 'community_records'
+                  ? 'bg-white text-blue-700 shadow-sm font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Award size={15} /> Ghi nhận công tác xã hội & Thể thao
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivitySubTab('class_events')}
+              className={`flex-1 py-2.5 px-3 text-xs font-bold rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1.5 ${
+                activitySubTab === 'class_events'
+                  ? 'bg-white text-blue-700 shadow-sm font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Sparkles size={15} /> Kỷ niệm & Phong trào lớp
+            </button>
           </div>
 
-          {/* Photo Gallery & Class Moments */}
-          {albums.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <Camera size={18} className="text-indigo-600" />
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                    Hình ảnh kỷ niệm & Hoạt động tập thể của lớp
-                  </h3>
+          {/* 1. Primary Feature: Community & Extracurricular Activities Table */}
+          {activitySubTab === 'community_records' && (
+            <CommunityActivitiesView 
+              student={student}
+              allStudents={allStudents}
+              mode="student"
+              isReadOnly={false}
+            />
+          )}
+
+          {/* 2. Secondary Feature: Class Announcements, Plans & Moments */}
+          {activitySubTab === 'class_events' && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Left: Class Announcements & Movement Events */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                    <Sparkles size={18} className="text-amber-500" />
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                      Hoạt động phong trào & Thi đua lớp
+                    </h3>
+                  </div>
+
+                  {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').length > 0 ? (
+                    <div className="space-y-3">
+                      {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').map(ann => (
+                        <div key={ann.id} className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 font-black text-[9px] rounded-full uppercase">
+                              {ann.category}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-semibold">{ann.date}</span>
+                          </div>
+                          <h4 className="font-black text-slate-800 text-xs">{ann.title}</h4>
+                          {ann.content && (
+                            <p className="text-slate-500 text-[11px] leading-relaxed line-clamp-3">{ann.content}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl text-slate-400 text-xs font-semibold">
+                      Chưa có thông báo phong trào mới.
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-slate-400 font-semibold">{albums.length} album hoạt động</span>
+
+                {/* Right: Weekly Direction & Collective Objectives */}
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                    <Award size={18} className="text-blue-600" />
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                      Định hướng tuần & Phong trào rèn luyện
+                    </h3>
+                  </div>
+
+                  {plans.length > 0 ? (
+                    <div className="space-y-3">
+                      {plans.slice(0, 3).map(p => (
+                        <div key={p.id} className="p-4 bg-blue-50/40 border border-blue-100 rounded-2xl space-y-2 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="font-black text-blue-900 text-xs">Tuần {p.weekNumber}: {p.title}</span>
+                            <span className="text-[10px] text-blue-600 font-bold">{p.dateRange}</span>
+                          </div>
+                          {p.objectives && (
+                            <div className="bg-white/80 p-2.5 rounded-xl border border-blue-200/50 text-[11px] text-slate-700">
+                              <strong>Mục tiêu tuần:</strong> {p.objectives}
+                            </div>
+                          )}
+                          {p.teacherNotes && (
+                            <p className="text-[11px] text-slate-500">
+                              <strong>Lời nhắn GV:</strong> {p.teacherNotes}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl text-slate-400 text-xs font-semibold">
+                      Chưa có kế hoạch tuần được phân công.
+                    </div>
+                  )}
+                </div>
+
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {albums.slice(0, 3).map(album => (
-                  <div key={album.id} className="group bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition">
-                    <div className="aspect-video w-full bg-slate-200 relative overflow-hidden">
-                      {album.coverUrl ? (
-                        <img 
-                          src={normalizeImageUrl(album.coverUrl)} 
-                          alt={album.title} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                          <Camera size={24} />
-                        </div>
-                      )}
-                      <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded-lg backdrop-blur-xs">
-                        {album.photos?.length || 0} ảnh
-                      </span>
+              {/* Photo Gallery & Class Moments */}
+              {albums.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Camera size={18} className="text-indigo-600" />
+                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                        Hình ảnh kỷ niệm & Hoạt động tập thể của lớp
+                      </h3>
                     </div>
-                    <div className="p-3 space-y-1">
-                      <h4 className="text-xs font-black text-slate-800 line-clamp-1 group-hover:text-blue-600 transition">
-                        {album.title}
-                      </h4>
-                      <p className="text-[10px] text-slate-400 line-clamp-2">{album.description || 'Hoạt động trải nghiệm tập thể'}</p>
-                    </div>
+                    <span className="text-xs text-slate-400 font-semibold">{albums.length} album hoạt động</span>
                   </div>
-                ))}
-              </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {albums.slice(0, 3).map(album => (
+                      <div key={album.id} className="group bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition">
+                        <div className="aspect-video w-full bg-slate-200 relative overflow-hidden">
+                          {album.coverUrl ? (
+                            <img 
+                              src={normalizeImageUrl(album.coverUrl)} 
+                              alt={album.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                              <Camera size={24} />
+                            </div>
+                          )}
+                          <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded-lg backdrop-blur-xs">
+                            {album.photos?.length || 0} ảnh
+                          </span>
+                        </div>
+                        <div className="p-3 space-y-1">
+                          <h4 className="text-xs font-black text-slate-800 line-clamp-1 group-hover:text-blue-600 transition">
+                            {album.title}
+                          </h4>
+                          <p className="text-[10px] text-slate-400 line-clamp-2">{album.description || 'Hoạt động trải nghiệm tập thể'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
