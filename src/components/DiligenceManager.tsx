@@ -286,15 +286,28 @@ export default function DiligenceManager({
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Điểm trừ</label>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-1.5 block">Điểm trừ (0 đến -100)</label>
                   <input
                     id="violation-points-input"
                     type="number"
+                    min={-100}
                     max={0}
                     required
                     value={points}
                     disabled={isReadOnly}
-                    onChange={(e) => setPoints(parseInt(e.target.value, 10))}
+                    onChange={(e) => {
+                      const rawVal = e.target.value;
+                      if (rawVal === '') {
+                        setPoints(0);
+                      } else {
+                        const parsed = parseInt(rawVal, 10);
+                        if (isNaN(parsed)) {
+                          setPoints(0);
+                        } else {
+                          setPoints(Math.min(0, Math.max(-100, parsed)));
+                        }
+                      }
+                    }}
                     className="w-full text-xs bg-[#0a0a0a] border border-white/10 text-white rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 font-mono disabled:opacity-50"
                   />
                 </div>
