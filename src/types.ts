@@ -6,6 +6,8 @@
 export interface Teacher {
   id: string; // e.g. GV01
   name: string;
+  subject?: string;
+  phone?: string;
 }
 
 export interface SchoolYear {
@@ -175,6 +177,43 @@ export interface PhotoAlbum {
   isPublished?: boolean; // Hiển thị trên Web công khai
   featured?: boolean; // Đặt làm nổi bật
 }
+
+export interface CommunityActivityEntry {
+  stt: number;
+  categoryKey: string; // 'mien_trung' | 'clb' | 'bch' | 'cap_cum' | 'giup_ban' | 'khac' | 'the_thao_tong'
+  title: string; // NỘI DUNG CÔNG VIỆC
+  guide: string; // Diễn giải quy định số giờ
+  studentNote: string; // DIỄN GIẢI NỘI DUNG VÀ SỐ GIỜ THAM GIA MỖI NỘI DUNG (Học sinh tự diễn giải)
+  hours: number; // TỔNG GIỜ (Học sinh tự cho)
+  isConfirmed: boolean; // Cột XÁC NHẬN (Checkbox)
+  signedBy: string; // Cột NGƯỜI ĐÁNH GIÁ (KÝ TÊN)
+  signerNote?: string;
+}
+
+export interface SportArtActivityItem {
+  id: string;
+  name: string; // Các hoạt động văn nghệ, thể thao, ngoại khoá
+  role: 'Tham gia' | 'Cổ vũ' | string; // Ghi "Cổ vũ", "Tham gia"
+  achievement: string; // Thành tích (Giải)
+  hours: number; // Số giờ mỗi hoạt động (Học sinh tự cho)
+  isConfirmed: boolean; // Cột XÁC NHẬN (Checkbox)
+  signedBy: string; // Cột NGƯỜI ĐÁNH GIÁ (KÝ TÊN)
+  note?: string;
+}
+
+export interface StudentCommunityRecord {
+  id: string; // studentId
+  studentId: string;
+  studentName?: string;
+  classId?: string;
+  schoolYearId?: string;
+  entries: CommunityActivityEntry[]; // 7 mục bảng 1
+  sportArtItems: SportArtActivityItem[]; // Chi tiết bảng 2
+  teacherComment?: string; // Nhận xét đánh giá cuối năm của GV
+  evaluationRating?: string; // 'Xuất sắc' | 'Tốt' | 'Đạt' | 'Cần cố gắng'
+  updatedAt?: string;
+}
+
 
 
 
