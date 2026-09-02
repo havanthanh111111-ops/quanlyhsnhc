@@ -1015,8 +1015,8 @@ export default function PublicPortal({
       {/* 3. SITE NAVIGATION BAR */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs px-3 sm:px-6 md:px-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 lg:gap-4 py-1.5 flex-nowrap min-w-0">
-          {/* Navigation Links with smooth scroll on smaller screens */}
-          <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+          {/* Navigation Links with overflow-visible to prevent clipping dropdowns */}
+          <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-1 min-w-0 overflow-visible flex-wrap sm:flex-nowrap py-0.5">
             {/* TRANG CHỦ */}
             <button
               type="button"
@@ -1072,7 +1072,10 @@ export default function PublicPortal({
             <div className="relative shrink-0" ref={planStudyDropdownRef}>
               <button
                 type="button"
-                onClick={() => setIsPlanStudyDropdownOpen(prev => !prev)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPlanStudyDropdownOpen(prev => !prev);
+                }}
                 className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${
                   (activeTab === 'plans' || activeTab === 'timetable' || activeTab === 'stats')
                     ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs'
@@ -1085,7 +1088,10 @@ export default function PublicPortal({
 
               {/* Dropdown Menu Popover */}
               {isPlanStudyDropdownOpen && (
-                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 z-50 animate-fadeIn space-y-1">
+                <div 
+                  className="absolute left-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl p-1.5 z-[100] animate-fadeIn space-y-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
                     Kế hoạch & Học tập
                   </div>
