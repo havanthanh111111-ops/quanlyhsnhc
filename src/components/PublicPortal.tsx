@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db, onSnapshot, collection, doc, getDoc, setDoc } from '../lib/firebase';
 import { 
   GraduationCap, 
@@ -45,7 +45,8 @@ import {
   Key,
   ShieldCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  Printer
 } from 'lucide-react';
 import { 
   Student, 
@@ -116,11 +117,12 @@ export default function PublicPortal({
   initialSchoolYearId
 }: PublicPortalProps) {
   // Navigation states
-  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'contact' | 'news' | 'archive' | 'albums'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'plans' | 'contact' | 'news' | 'archive' | 'albums'>('home');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [newsCategoryFilter, setNewsCategoryFilter] = useState<string>('Tất cả');
   const [activeNewsId, setActiveNewsId] = useState<string | null>(null);
   const [archiveSearchQuery, setArchiveSearchQuery] = useState<string>('');
+  const [planSearchQuery, setPlanSearchQuery] = useState<string>('');
 
   // Album state
   const [albumCategoryFilter, setAlbumCategoryFilter] = useState<string>('Tất cả');
@@ -128,6 +130,22 @@ export default function PublicPortal({
   const [activeSlideshowAlbum, setActiveSlideshowAlbum] = useState<PhotoAlbum | null>(null);
   const [slideshowInitialIndex, setSlideshowInitialIndex] = useState<number>(0);
   const [slideshowAutoPlay, setSlideshowAutoPlay] = useState<boolean>(true);
+
+  // Dropdown listbox for "KẾ HOẠCH - HỌC TẬP"
+  const [isPlanStudyDropdownOpen, setIsPlanStudyDropdownOpen] = useState(false);
+  const planStudyDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (planStudyDropdownRef.current && !planStudyDropdownRef.current.contains(event.target as Node)) {
+        setIsPlanStudyDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // School Year filter state
   const [selectedSchoolYearId, setSelectedSchoolYearId] = useState<string>(
@@ -588,10 +606,15 @@ export default function PublicPortal({
     }
   }, [selectedSchoolYearId, allClasses]);
 
-  // Reset selected weekly plan when class changes
+  // Reset selected weekly plan when class changes, unless current selectedPlan belongs to the new class
   useEffect(() => {
-    setSelectedPlanId(null);
-  }, [timetableClassId]);
+    if (selectedPlanId) {
+      const targetPlan = plans.find(p => p.id === selectedPlanId);
+      if (targetPlan && targetPlan.classId && targetPlan.classId !== timetableClassId) {
+        setSelectedPlanId(null);
+      }
+    }
+  }, [timetableClassId, plans, selectedPlanId]);
 
   // Keep academic round initialized based on active class, academicUpdates, & school year
   useEffect(() => {
@@ -821,15 +844,30 @@ export default function PublicPortal({
       .sort((a, b) => (a.weekNumber || 0) - (b.weekNumber || 0));
   }, [plans, timetableClassId]);
 
-  const activePlan = useMemo(() => {
-    if (classPlansSorted.length === 0) return null;
-    if (selectedPlanId) {
-      const plan = classPlansSorted.find(p => p.id === selectedPlanId);
-      if (plan) return plan;
+  // Filtered plans for the plans tab with search
+  const filteredClassPlans = useMemo(() => {
+    let list = plans.filter(p => p.classId === timetableClassId);
+    if (planSearchQuery.trim()) {
+      const q = planSearchQuery.trim().toLowerCase();
+      list = list.filter(p => 
+        (p.title && p.title.toLowerCase().includes(q)) ||
+        (p.objectives && p.objectives.toLowerCase().includes(q)) ||
+        (p.dateRange && p.dateRange.toLowerCase().includes(q)) ||
+        (p.weekNumber && p.weekNumber.toString().includes(q))
+      );
     }
+    return list.sort((a, b) => (a.weekNumber || 0) - (b.weekNumber || 0));
+  }, [plans, timetableClassId, planSearchQuery]);
+
+  const activePlan = useMemo(() => {
+    if (selectedPlanId) {
+      const target = classPlansSorted.find(p => p.id === selectedPlanId) || plans.find(p => p.id === selectedPlanId);
+      if (target) return target;
+    }
+    if (classPlansSorted.length === 0) return null;
     // Default to the last plan in the sorted list (which has the largest weekNumber)
     return classPlansSorted[classPlansSorted.length - 1];
-  }, [classPlansSorted, selectedPlanId]);
+  }, [classPlansSorted, selectedPlanId, plans]);
 
   // Statistics calculation for Recharts
   // 1. Diligence summary by Class
@@ -979,35 +1017,221 @@ export default function PublicPortal({
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 lg:gap-4 py-1.5 flex-nowrap min-w-0">
           {/* Navigation Links with smooth scroll on smaller screens */}
           <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
-            {[
-              { id: 'home', label: 'TRANG CHỦ' },
-              { id: 'about', label: 'GIỚI THIỆU' },
-              { id: 'lookup', label: 'TRA CỨU' },
-              { id: 'stats', label: 'THỐNG KÊ & BIỂU ĐỒ' },
-              { id: 'timetable', label: 'HOẠT ĐỘNG' },
-              { id: 'archive', label: 'VĂN BẢN' },
-              { id: 'albums', label: 'ALBUM ẢNH' },
-              { id: 'news', label: 'TIN TỨC' },
-              { id: 'contact', label: 'LIÊN HỆ PHẢN HỒI' }
-            ].map(item => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id as any);
-                    setSelectedStudent(null);
-                  }}
-                  className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                    isActive 
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
-                      : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
+            {/* TRANG CHỦ */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('home');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'home' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              TRANG CHỦ
+            </button>
+
+            {/* GIỚI THIỆU */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('about');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'about' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              GIỚI THIỆU
+            </button>
+
+            {/* TRA CỨU */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('lookup');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'lookup' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              TRA CỨU
+            </button>
+
+            {/* LISTBOX / DROPDOWN: KẾ HOẠCH - HỌC TẬP */}
+            <div className="relative shrink-0" ref={planStudyDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsPlanStudyDropdownOpen(prev => !prev)}
+                className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                  (activeTab === 'plans' || activeTab === 'timetable' || activeTab === 'stats')
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs'
+                    : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+                }`}
+              >
+                <span>KẾ HOẠCH - HỌC TẬP</span>
+                <ChevronDown size={13} className={`transition-transform duration-200 ${isPlanStudyDropdownOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'}`} />
+              </button>
+
+              {/* Dropdown Menu Popover */}
+              {isPlanStudyDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 z-50 animate-fadeIn space-y-1">
+                  <div className="px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    Kế hoạch & Học tập
+                  </div>
+
+                  {/* 1. MỤC TIÊU & KẾ HOẠCH */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('plans');
+                      setIsPlanStudyDropdownOpen(false);
+                      setSelectedStudent(null);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition flex items-center gap-2.5 cursor-pointer ${
+                      activeTab === 'plans'
+                        ? 'bg-blue-50 text-blue-700 font-black border border-blue-200/60 shadow-2xs'
+                        : 'text-slate-700 hover:bg-slate-50 hover:text-blue-900 font-bold'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg shrink-0 ${activeTab === 'plans' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                      <Award size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold leading-tight">MỤC TIÊU & KẾ HOẠCH</div>
+                      <div className="text-[10px] text-slate-400 font-medium">Kế hoạch tuần & mục tiêu GVCN</div>
+                    </div>
+                    {activeTab === 'plans' && <CheckCircle size={14} className="text-blue-600 shrink-0" />}
+                  </button>
+
+                  {/* 2. HOẠT ĐỘNG */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('timetable');
+                      setIsPlanStudyDropdownOpen(false);
+                      setSelectedStudent(null);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition flex items-center gap-2.5 cursor-pointer ${
+                      activeTab === 'timetable'
+                        ? 'bg-blue-50 text-blue-700 font-black border border-blue-200/60 shadow-2xs'
+                        : 'text-slate-700 hover:bg-slate-50 hover:text-blue-900 font-bold'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg shrink-0 ${activeTab === 'timetable' ? 'bg-blue-600 text-white' : 'bg-emerald-50 text-emerald-600'}`}>
+                      <Calendar size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold leading-tight">HOẠT ĐỘNG</div>
+                      <div className="text-[10px] text-slate-400 font-medium">Thời khóa biểu & phong trào</div>
+                    </div>
+                    {activeTab === 'timetable' && <CheckCircle size={14} className="text-blue-600 shrink-0" />}
+                  </button>
+
+                  {/* 3. THỐNG KÊ & BIỂU ĐỒ */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('stats');
+                      setIsPlanStudyDropdownOpen(false);
+                      setSelectedStudent(null);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition flex items-center gap-2.5 cursor-pointer ${
+                      activeTab === 'stats'
+                        ? 'bg-blue-50 text-blue-700 font-black border border-blue-200/60 shadow-2xs'
+                        : 'text-slate-700 hover:bg-slate-50 hover:text-blue-900 font-bold'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg shrink-0 ${activeTab === 'stats' ? 'bg-blue-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                      <BarChart2 size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold leading-tight">THỐNG KÊ & BIỂU ĐỒ</div>
+                      <div className="text-[10px] text-slate-400 font-medium">Báo cáo nề nếp & thi đua lớp</div>
+                    </div>
+                    {activeTab === 'stats' && <CheckCircle size={14} className="text-blue-600 shrink-0" />}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* VĂN BẢN */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('archive');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'archive' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              VĂN BẢN
+            </button>
+
+            {/* ALBUM ẢNH */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('albums');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'albums' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              ALBUM ẢNH
+            </button>
+
+            {/* TIN TỨC */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('news');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'news' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              TIN TỨC
+            </button>
+
+            {/* LIÊN HỆ PHẢN HỒI */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('contact');
+                setSelectedStudent(null);
+                setIsPlanStudyDropdownOpen(false);
+              }}
+              className={`px-2.5 sm:px-3 lg:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tracking-tight sm:tracking-normal transition duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                activeTab === 'contact' 
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs' 
+                  : 'border border-transparent text-slate-600 hover:bg-slate-50 hover:text-blue-900'
+              }`}
+            >
+              LIÊN HỆ PHẢN HỒI
+            </button>
           </div>
 
           {/* Dynamic School Year Filter */}
@@ -1168,9 +1392,11 @@ export default function PublicPortal({
                 {activeTab === 'home' && 'TRANG CHỦ'}
                 {activeTab === 'about' && 'GIỚI THIỆU NHÀ TRƯỜNG'}
                 {activeTab === 'lookup' && 'TRA CỨU HỌC SINH'}
+                {activeTab === 'plans' && 'MỤC TIÊU & KẾ HOẠCH TUẦN'}
+                {activeTab === 'timetable' && 'HOẠT ĐỘNG & THỜI KHÓA BIỂU'}
                 {activeTab === 'stats' && 'THỐNG KÊ & BIỂU ĐỒ'}
-                {activeTab === 'timetable' && 'THỜI KHÓA BIỂU & KẾ HOẠCH'}
                 {activeTab === 'archive' && 'VĂN BẢN & QUY ĐỊNH'}
+                {activeTab === 'albums' && 'ALBUM ẢNH HOẠT ĐỘNG'}
                 {activeTab === 'news' && 'TIN TỨC & CHUYÊN MỤC'}
                 {activeTab === 'contact' && 'LIÊN HỆ PHẢN HỒI'}
               </span>
@@ -1516,6 +1742,31 @@ export default function PublicPortal({
                     setSelectedStudent(updated);
                     if (onUpdateStudent) {
                       onUpdateStudent(updated);
+                    }
+                  }}
+                  onOpenAnnouncement={(ann) => {
+                    setSelectedAnn(ann);
+                  }}
+                  onNavigateToPublicTab={(tab, targetId) => {
+                    setActiveTab(tab as any);
+                    if (tab === 'news' && targetId) {
+                      const found = announcements.find(a => a.id === targetId);
+                      if (found) setSelectedAnn(found);
+                      setActiveNewsId(targetId);
+                    } else if (tab === 'plans') {
+                      if (targetId) {
+                        const targetPlan = plans.find(p => p.id === targetId) || allPlans.find(p => p.id === targetId);
+                        if (targetPlan && targetPlan.classId) {
+                          updateSelectedClass(targetPlan.classId);
+                        }
+                        setSelectedPlanId(targetId);
+                      }
+                    } else if (tab === 'albums' && targetId) {
+                      const foundAlbum = propAlbums.find(a => a.id === targetId);
+                      if (foundAlbum) {
+                        setActiveSlideshowAlbum(foundAlbum);
+                        setSlideshowInitialIndex(0);
+                      }
                     }
                   }}
                 />
@@ -2987,144 +3238,340 @@ export default function PublicPortal({
                 </div>
               </div>
 
-              {/* Class weekly objectives / highlights from Weekly Plan (always visible at the bottom) */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100">
-                  MỤC TIÊU & HOẠT ĐỘNG TRỌNG TÂM LỚP TRONG TUẦN
-                </h3>
-
-                {classPlansSorted.length > 0 ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left panel: Plan list (Weeks 1 to N) */}
-                    <div className="lg:col-span-1 space-y-2 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
-                      {classPlansSorted.map((plan) => {
-                        const isSelected = activePlan?.id === plan.id;
-                        return (
-                          <button
-                            key={plan.id}
-                            onClick={() => setSelectedPlanId(plan.id)}
-                            className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex flex-col space-y-1.5 cursor-pointer ${
-                              isSelected
-                                ? 'bg-blue-50/60 border-blue-300 ring-1 ring-blue-300 text-blue-900'
-                                : 'bg-white border-slate-200 hover:bg-slate-50/80 hover:border-slate-300 text-slate-700'
-                            }`}
-                          >
-                            <h4 className={`text-xs font-extrabold uppercase tracking-tight ${
-                              isSelected ? 'text-blue-900 font-black' : 'text-slate-800'
-                            }`}>
-                              Tuần {plan.weekNumber}: {plan.title}
-                            </h4>
-                            <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">
-                              {plan.dateRange}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Right panel: Selected plan details */}
-                    <div className="lg:col-span-2 border-l border-slate-100 pl-0 lg:pl-6">
-                      {activePlan ? (
-                        (() => {
-                          const planClassItem = classes.find(c => c.id === timetableClassId);
-                          const planTeacher = planClassItem ? teachers.find(t => t.id === planClassItem.teacherId) : null;
-                          const planTeacherName = planTeacher ? planTeacher.name : 'Chưa phân công';
-
-                          // Helper to format date in DD/MM/YYYY format
-                          const getFormattedDate = (dateStr: string) => {
-                            if (!dateStr) return '';
-                            const parts = dateStr.split('-');
-                            if (parts.length === 3) {
-                              return `${parts[2]}/${parts[1]}/${parts[0]}`;
-                            }
-                            return dateStr;
-                          };
-
-                          return (
-                            <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm p-6 sm:p-8 space-y-6 text-slate-800">
-                              {/* Header Section (Identical to mockup) */}
-                              <div className="text-center pb-4 border-b-2 border-slate-850 space-y-1">
-                                <h1 className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-slate-500">TRƯỜNG THPT NGUYỄN HỮU CẦU</h1>
-                                <h2 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight">KẾ HOẠCH TUẦN GIÁO VIÊN CHỦ NHIỆM</h2>
-                                <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-3 text-[11px] sm:text-xs text-slate-500 font-medium pt-1 select-none">
-                                  <span>Lớp: <strong className="text-slate-700">{planClassItem?.name || 'Chưa cập nhật'}</strong></span>
-                                  <span className="text-slate-300">•</span>
-                                  <span>Tuần học: <strong className="text-slate-700">{activePlan.weekNumber}</strong></span>
-                                  <span className="text-slate-300">•</span>
-                                  <span>Từ: <strong className="text-slate-700">{activePlan.dateRange}</strong></span>
-                                </div>
-                              </div>
-
-                              {/* Title Section */}
-                              <div className="space-y-1">
-                                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
-                                  {activePlan.title}
-                                </h3>
-                                <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
-                                  Lập ngày: <span className="font-semibold">{getFormattedDate(activePlan.createdAt)}</span> - GVCN: <span className="text-slate-500 font-bold italic">{planTeacherName}</span>
-                                </p>
-                              </div>
-
-                              {/* Two Columns Side by Side: Objectives and Notes */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Left Card: Objectives */}
-                                <div className="bg-amber-50/15 border border-amber-200/60 rounded-2xl p-4 space-y-3 shadow-sm hover:shadow-md transition duration-200">
-                                  <h4 className="text-[11px] sm:text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5 select-none">
-                                    <Sparkles size={13} className="text-blue-500" />
-                                    MỤC TIÊU TRỌNG ĐIỂM
-                                  </h4>
-                                  <ul className="space-y-1.5 text-xs text-slate-700 font-medium leading-relaxed">
-                                    {(activePlan.objectives || 'Chưa thiết lập mục tiêu chi tiết.').split('\n').map((line, i) => {
-                                      const cleanLine = line.replace(/^[-*•]\s*/, '').trim();
-                                      return (
-                                        <li key={i} className="flex items-start gap-1.5">
-                                          <span className="text-blue-500 font-black mt-0.5">•</span>
-                                          <span>{cleanLine || '...'}</span>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                </div>
-
-                                {/* Right Card: Notes */}
-                                <div className="bg-slate-50/30 border border-slate-200/60 rounded-2xl p-4 space-y-3 shadow-sm hover:shadow-md transition duration-200">
-                                  <h4 className="text-[11px] sm:text-xs font-black text-slate-850 uppercase tracking-wider flex items-center gap-1.5 select-none">
-                                    <FileText size={13} className="text-blue-500" />
-                                    LƯU Ý CHỦ NHIỆM
-                                  </h4>
-                                  <div className="text-xs text-slate-600 font-medium whitespace-pre-wrap leading-relaxed">
-                                    {activePlan.teacherNotes || 'Không có ghi chú thêm cho tuần này.'}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Detailed Agenda / Content */}
-                              {activePlan.content && (
-                                <div className="border-t border-slate-100 pt-5 space-y-3">
-                                  <h4 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider select-none">
-                                    Lịch trình & phân công nhiệm vụ
-                                  </h4>
-                                  <div className="prose prose-slate max-w-none text-slate-700">
-                                    {parsePublicMarkdown(activePlan.content)}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        <div className="p-8 text-center text-slate-400 italic text-xs h-full flex items-center justify-center bg-slate-50 border border-dashed border-slate-200 rounded-3xl">
-                          Vui lòng chọn một kế hoạch tuần từ danh sách bên trái để xem chi tiết.
-                        </div>
-                      )}
-                    </div>
+              {/* Quick banner linking to the dedicated Plans tab */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200/80 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-sm shrink-0 mt-0.5">
+                    <Award size={20} />
                   </div>
-                ) : (
-                  <div className="p-6 text-center text-slate-400 italic text-xs">
-                    Giáo viên chủ nhiệm lớp chưa đăng tải kế hoạch hoạt động cụ thể lên Cổng thông tin.
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-blue-950 uppercase tracking-wider">
+                      Mục tiêu & Kế hoạch hoạt động tuần của lớp
+                    </h4>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                      Nội dung mục tiêu rèn luyện, chuyên cần, nề nếp và lịch trình phân công tuần do GVCN ban hành đã được chuyển sang tab riêng biệt.
+                    </p>
                   </div>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('plans')}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl transition shadow-2xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <span>Mở Tab Mục tiêu & Kế hoạch &gt;&gt;</span>
+                  <ChevronRight size={14} />
+                </button>
               </div>
+
+            </div>
+          )}
+
+          {/* TAB CONTENT: WEEKLY PLANS & OBJECTIVES (MỤC TIÊU & KẾ HOẠCH TUẦN) */}
+          {activeTab === 'plans' && (
+            <div className="space-y-6 animate-fadeIn">
+              
+              {/* Header & Filter Bar */}
+              <div className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-50 text-blue-700 border border-blue-200/80 rounded-2xl shadow-2xs">
+                      <Award size={22} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
+                        MỤC TIÊU & KẾ HOẠCH HOẠT ĐỘNG LỚP TRONG TUẦN
+                      </h2>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Kế hoạch rèn luyện nề nếp, học tập & nhiệm vụ trọng tâm do Giáo viên chủ nhiệm ban hành
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Class selector & Print */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-wider">LỚP:</span>
+                    <select
+                      value={timetableClassId}
+                      onChange={(e) => {
+                        const newClassId = e.target.value;
+                        updateSelectedClass(newClassId);
+                      }}
+                      className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 rounded-xl px-3 py-2 text-xs font-black text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer shadow-2xs transition"
+                    >
+                      {classes.map(cls => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="In kế hoạch tuần"
+                    >
+                      <Printer size={14} />
+                      <span className="hidden sm:inline">In trang</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-bar: Search and Quick overview */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="relative w-full sm:w-80">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={planSearchQuery}
+                      onChange={(e) => setPlanSearchQuery(e.target.value)}
+                      placeholder="Tìm theo tuần, tiêu đề, mục tiêu..."
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200/90 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                    />
+                    {planSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setPlanSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold w-full sm:w-auto justify-between sm:justify-end">
+                    <span>Tổng số: <strong className="text-blue-700 font-black">{classPlansSorted.length}</strong> kế hoạch tuần</span>
+                    {currentClass && (
+                      <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-black rounded-lg text-[11px] border border-blue-100">
+                        {currentClass.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main Master-Detail Layout */}
+              {classPlansSorted.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left Column: Weekly Plans List */}
+                  <div className="lg:col-span-1 space-y-3">
+                    <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-2.5">
+                      <div className="flex items-center justify-between px-1 pb-2 border-b border-slate-100">
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                          DANH SÁCH CÁC TUẦN
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {filteredClassPlans.length} / {classPlansSorted.length} tuần
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
+                        {filteredClassPlans.length > 0 ? (
+                          filteredClassPlans.map((plan) => {
+                            const isSelected = activePlan?.id === plan.id;
+                            const isLatest = plan.id === classPlansSorted[classPlansSorted.length - 1]?.id;
+
+                            return (
+                              <button
+                                key={plan.id}
+                                onClick={() => setSelectedPlanId(plan.id)}
+                                className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex flex-col space-y-2 cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-400/30 text-blue-950 shadow-xs'
+                                    : 'bg-white border-slate-200/90 hover:bg-slate-50 hover:border-slate-300 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <span className={`px-2.5 py-0.5 rounded-lg font-black text-[11px] ${
+                                    isSelected 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'bg-slate-100 text-slate-800'
+                                  }`}>
+                                    Tuần {plan.weekNumber}
+                                  </span>
+                                  {isLatest && (
+                                    <span className="px-2 py-0.5 bg-rose-500 text-white font-black text-[9px] rounded-full uppercase tracking-wider">
+                                      Mới nhất
+                                    </span>
+                                  )}
+                                </div>
+
+                                <h4 className={`text-xs font-bold leading-snug line-clamp-2 ${
+                                  isSelected ? 'text-blue-950 font-black' : 'text-slate-800'
+                                }`}>
+                                  {plan.title}
+                                </h4>
+
+                                <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono font-medium pt-1 border-t border-slate-100/80">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar size={11} className="text-slate-400" />
+                                    {plan.dateRange}
+                                  </span>
+                                  {isSelected && (
+                                    <CheckCircle size={13} className="text-blue-600" />
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="p-6 text-center text-slate-400 text-xs italic">
+                            Không tìm thấy kế hoạch phù hợp với từ khóa "{planSearchQuery}".
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Active Plan Document Details */}
+                  <div className="lg:col-span-2">
+                    {activePlan ? (
+                      (() => {
+                        const planClassItem = classes.find(c => c.id === timetableClassId);
+                        const planTeacher = planClassItem ? teachers.find(t => t.id === planClassItem.teacherId) : null;
+                        const planTeacherName = planTeacher ? planTeacher.name : 'Chưa phân công';
+
+                        const getFormattedDate = (dateStr: string) => {
+                          if (!dateStr) return '';
+                          const parts = dateStr.split('-');
+                          if (parts.length === 3) {
+                            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                          }
+                          return dateStr;
+                        };
+
+                        return (
+                          <div className="bg-white border border-slate-200/90 rounded-3xl shadow-sm p-6 sm:p-8 space-y-6 text-slate-800">
+                            
+                            {/* Official Document Header */}
+                            <div className="text-center pb-5 border-b-2 border-slate-800 space-y-1.5">
+                              <h1 className="text-[11px] sm:text-xs uppercase tracking-widest font-bold text-slate-500">
+                                SỞ GIÁO DỤC VÀ ĐÀO TẠO TP. HỒ CHÍ MINH — TRƯỜNG THPT NGUYỄN HỮU CẦU
+                              </h1>
+                              <h2 className="text-base sm:text-xl font-black text-slate-900 uppercase tracking-tight">
+                                KẾ HOẠCH TUẦN GIÁO VIÊN CHỦ NHIỆM
+                              </h2>
+                              <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 text-xs text-slate-600 font-semibold pt-1 select-none">
+                                <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 rounded-lg border border-blue-200">
+                                  Lớp: <strong>{planClassItem?.name || 'Chưa cập nhật'}</strong>
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                <span className="px-2.5 py-0.5 bg-slate-100 text-slate-800 rounded-lg">
+                                  Tuần học: <strong>{activePlan.weekNumber}</strong>
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                <span className="px-2.5 py-0.5 bg-slate-100 text-slate-800 rounded-lg font-mono">
+                                  Thời gian: <strong>{activePlan.dateRange}</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Plan Title Section */}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 bg-blue-600 text-white font-black text-[10px] rounded-md uppercase">
+                                  Tuần {activePlan.weekNumber}
+                                </span>
+                                <span className="text-xs text-slate-400 font-medium">
+                                  Lập ngày: <strong className="text-slate-600">{getFormattedDate(activePlan.createdAt)}</strong>
+                                </span>
+                              </div>
+                              <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug pt-1">
+                                {activePlan.title}
+                              </h3>
+                              <p className="text-xs text-slate-500 font-medium">
+                                Giáo viên chủ nhiệm phụ trách: <span className="text-blue-900 font-bold italic">{planTeacherName}</span>
+                              </p>
+                            </div>
+
+                            {/* Objectives and Reminders Side-by-Side */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Left: Key Objectives */}
+                              <div className="bg-blue-50/50 border border-blue-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs">
+                                <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider flex items-center gap-2 select-none">
+                                  <Sparkles size={15} className="text-blue-600" />
+                                  MỤC TIÊU & TRỌNG TÂM TUẦN
+                                </h4>
+                                <ul className="space-y-2 text-xs text-slate-700 font-medium leading-relaxed">
+                                  {(activePlan.objectives || 'Chưa thiết lập mục tiêu chi tiết.').split('\n').map((line, i) => {
+                                    const cleanLine = line.replace(/^[-*•]\s*/, '').trim();
+                                    if (!cleanLine) return null;
+                                    return (
+                                      <li key={i} className="flex items-start gap-2">
+                                        <span className="text-blue-600 font-black mt-0.5 shrink-0">•</span>
+                                        <span className="leading-snug">{cleanLine}</span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+
+                              {/* Right: Homeroom Teacher Notes & Guidance */}
+                              <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs">
+                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-2 select-none">
+                                  <FileText size={15} className="text-amber-600" />
+                                  LƯU Ý & DẶN DÒ CỦA GVCN
+                                </h4>
+                                <div className="text-xs text-amber-950 font-medium whitespace-pre-wrap leading-relaxed">
+                                  {activePlan.teacherNotes || 'Không có dặn dò bổ sung cho tuần này.'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Detailed Agenda / Content */}
+                            {activePlan.content && (
+                              <div className="border-t border-slate-100 pt-5 space-y-3">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                                  <BookOpen size={14} className="text-blue-500" />
+                                  LỊCH TRÌNH HOẠT ĐỘNG & PHÂN CÔNG NHIỆM VỤ CHI TIẾT
+                                </h4>
+                                <div className="p-4 sm:p-5 bg-slate-50/70 border border-slate-200/80 rounded-2xl text-slate-700 leading-relaxed text-xs sm:text-sm whitespace-pre-wrap font-medium">
+                                  {parsePublicMarkdown(activePlan.content)}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bottom Navigation Buttons */}
+                            <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('timetable')}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-extrabold transition cursor-pointer"
+                              >
+                                <span>Xem Thời khóa biểu lớp</span>
+                                <ChevronRight size={14} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('lookup')}
+                                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold transition cursor-pointer"
+                              >
+                                <span>Tra cứu nề nếp & điểm số học sinh</span>
+                                <ChevronRight size={14} />
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="p-12 text-center text-slate-400 italic text-xs h-full flex flex-col items-center justify-center bg-white border border-slate-200 rounded-3xl space-y-2">
+                        <Award size={32} className="text-slate-300" />
+                        <p>Vui lòng chọn một tuần từ danh sách bên trái để xem nội dung kế hoạch chi tiết.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3 shadow-sm">
+                  <Award size={36} className="text-slate-300 mx-auto" />
+                  <h3 className="text-sm font-black text-slate-700">Chưa có kế hoạch tuần cho lớp {currentClass?.name || ''}</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Giáo viên chủ nhiệm lớp hiện chưa đăng tải kế hoạch tuần lên hệ thống hoặc bạn có thể chọn lớp khác từ danh sách ở trên để xem.
+                  </p>
+                </div>
+              )}
 
             </div>
           )}
