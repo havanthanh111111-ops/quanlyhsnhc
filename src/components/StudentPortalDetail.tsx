@@ -38,7 +38,11 @@ import {
   Activity,
   Lock,
   Key,
-  ShieldCheck
+  ShieldCheck,
+  X,
+  ZoomIn,
+  Maximize2,
+  ImageIcon
 } from 'lucide-react';
 import { 
   Student, 
@@ -83,6 +87,8 @@ interface StudentPortalDetailProps {
   onBack: () => void;
   onSelectStudent?: (student: Student) => void;
   onUpdateStudent?: (student: Student) => void;
+  onOpenAnnouncement?: (ann: Announcement) => void;
+  onNavigateToPublicTab?: (tab: 'news' | 'plans' | 'archive' | 'albums' | 'timetable', targetId?: string) => void;
 }
 
 export default function StudentPortalDetail({
@@ -101,11 +107,18 @@ export default function StudentPortalDetail({
   albums = [],
   onBack,
   onSelectStudent,
-  onUpdateStudent
+  onUpdateStudent,
+  onOpenAnnouncement,
+  onNavigateToPublicTab
 }: StudentPortalDetailProps) {
   // Navigation tabs within the student portal
   const [activePortalTab, setActivePortalTab] = useState<'profile' | 'diligence' | 'academics' | 'activities' | 'communication' | 'custom'>('profile');
   const [activitySubTab, setActivitySubTab] = useState<'community_records' | 'class_events'>('community_records');
+
+  // Announcement & Plan reading modal state
+  const [readingAnnouncement, setReadingAnnouncement] = useState<Announcement | null>(null);
+  const [readingPlan, setReadingPlan] = useState<WeeklyPlan | null>(null);
+  const [zoomImage, setZoomImage] = useState<{ url: string; title?: string } | null>(null);
 
   // Password Change Modal State
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState<boolean>(false);
@@ -1054,27 +1067,95 @@ export default function StudentPortalDetail({
                 
                 {/* Left: Class Announcements & Movement Events */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Sparkles size={18} className="text-amber-500" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                      Hoạt động phong trào & Thi đua lớp
-                    </h3>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={18} className="text-amber-500" />
+                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                        Hoạt động phong trào & Thi đua lớp
+                      </h3>
+                    </div>
+                    {onNavigateToPublicTab && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToPublicTab('news')}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition cursor-pointer"
+                        title="Xem toàn bộ tin tức trên web trường"
+                      >
+                        <span>Cổng Tin tức Web</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    )}
                   </div>
 
                   {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                       {announcements.filter(a => a.category === 'Phong trào' || a.category === 'Nề nếp').map(ann => (
-                        <div key={ann.id} className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2 text-xs">
+                        <div 
+                          key={ann.id} 
+                          className="p-4 bg-slate-50 hover:bg-blue-50/30 border border-slate-200/80 hover:border-blue-200 rounded-2xl space-y-2.5 text-xs transition"
+                        >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 font-black text-[9px] rounded-full uppercase">
-                              {ann.category}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-semibold">{ann.date}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 font-black text-[9px] rounded-full uppercase tracking-wider border border-amber-200/60">
+                                {ann.category}
+                              </span>
+                              {ann.isNew && (
+                                <span className="px-1.5 py-0.2 bg-rose-500 text-white font-black text-[8px] rounded-full uppercase animate-pulse">
+                                  NEW
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono font-semibold">{ann.date}</span>
                           </div>
-                          <h4 className="font-black text-slate-800 text-xs">{ann.title}</h4>
+
+                          <h4 
+                            onClick={() => {
+                              if (onOpenAnnouncement) {
+                                onOpenAnnouncement(ann);
+                              } else {
+                                setReadingAnnouncement(ann);
+                              }
+                            }}
+                            className="font-black text-slate-900 text-xs leading-snug cursor-pointer hover:text-blue-600 transition"
+                          >
+                            {ann.title}
+                          </h4>
+
                           {ann.content && (
-                            <p className="text-slate-500 text-[11px] leading-relaxed line-clamp-3">{ann.content}</p>
+                            <p className="text-slate-600 text-[11px] leading-relaxed line-clamp-3">
+                              {ann.content.replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/###/g, '').replace(/\*\*/g, '')}
+                            </p>
                           )}
+
+                          {/* LINK CHI TIẾT ĐẾN BÀI VIẾT TRÊN WEB CÔNG */}
+                          <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onOpenAnnouncement) {
+                                  onOpenAnnouncement(ann);
+                                } else {
+                                  setReadingAnnouncement(ann);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-extrabold text-[11px] transition cursor-pointer group"
+                            >
+                              <BookOpen size={13} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                              <span>Xem chi tiết bài viết &gt;&gt;</span>
+                            </button>
+
+                            {onNavigateToPublicTab && (
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToPublicTab('news', ann.id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-50 text-slate-600 hover:text-blue-700 border border-slate-200 hover:border-blue-300 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                                title="Chuyển đến bài viết này trên trang tin tức công khai"
+                              >
+                                <span>Xem trên Web công</span>
+                                <ExternalLink size={11} className="text-blue-500" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1087,20 +1168,33 @@ export default function StudentPortalDetail({
 
                 {/* Right: Weekly Direction & Collective Objectives */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Award size={18} className="text-blue-600" />
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                      Định hướng tuần & Phong trào rèn luyện
-                    </h3>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Award size={18} className="text-blue-600" />
+                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                        Định hướng tuần & Phong trào rèn luyện
+                      </h3>
+                    </div>
+                    {onNavigateToPublicTab && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToPublicTab('plans')}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition cursor-pointer"
+                        title="Xem toàn bộ kế hoạch tuần trên web trường"
+                      >
+                        <span>Kế hoạch tuần Web</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    )}
                   </div>
 
                   {plans.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                       {plans.slice(0, 3).map(p => (
-                        <div key={p.id} className="p-4 bg-blue-50/40 border border-blue-100 rounded-2xl space-y-2 text-xs">
+                        <div key={p.id} className="p-4 bg-blue-50/40 border border-blue-100 rounded-2xl space-y-2.5 text-xs">
                           <div className="flex justify-between items-center">
                             <span className="font-black text-blue-900 text-xs">Tuần {p.weekNumber}: {p.title}</span>
-                            <span className="text-[10px] text-blue-600 font-bold">{p.dateRange}</span>
+                            <span className="text-[10px] text-blue-600 font-bold font-mono">{p.dateRange}</span>
                           </div>
                           {p.objectives && (
                             <div className="bg-white/80 p-2.5 rounded-xl border border-blue-200/50 text-[11px] text-slate-700">
@@ -1112,6 +1206,30 @@ export default function StudentPortalDetail({
                               <strong>Lời nhắn GV:</strong> {p.teacherNotes}
                             </p>
                           )}
+
+                          {/* LINK CHI TIẾT LỊCH TRÌNH KẾ HOẠCH TUẦN */}
+                          <div className="pt-2 border-t border-blue-100/80 flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setReadingPlan(p)}
+                              className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-extrabold text-[11px] transition cursor-pointer group"
+                            >
+                              <FileText size={13} className="text-blue-600 group-hover:scale-110 transition-transform" />
+                              <span>Xem chi tiết lịch trình &gt;&gt;</span>
+                            </button>
+
+                            {onNavigateToPublicTab && (
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToPublicTab('plans', p.id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-100/80 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                                title="Xem kế hoạch chi tiết trên Web công"
+                              >
+                                <span>Xem trên Web công</span>
+                                <ExternalLink size={11} className="text-blue-600" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1134,34 +1252,63 @@ export default function StudentPortalDetail({
                         Hình ảnh kỷ niệm & Hoạt động tập thể của lớp
                       </h3>
                     </div>
-                    <span className="text-xs text-slate-400 font-semibold">{albums.length} album hoạt động</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-slate-400 font-semibold">{albums.length} album hoạt động</span>
+                      {onNavigateToPublicTab && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigateToPublicTab('albums')}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <span>Xem toàn bộ Album Web</span>
+                          <ExternalLink size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {albums.slice(0, 3).map(album => (
-                      <div key={album.id} className="group bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition">
-                        <div className="aspect-video w-full bg-slate-200 relative overflow-hidden">
-                          {album.coverUrl ? (
-                            <img 
-                              src={normalizeImageUrl(album.coverUrl)} 
-                              alt={album.title} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-400">
-                              <Camera size={24} />
-                            </div>
-                          )}
-                          <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded-lg backdrop-blur-xs">
-                            {album.photos?.length || 0} ảnh
-                          </span>
+                      <div 
+                        key={album.id} 
+                        onClick={() => {
+                          if (onNavigateToPublicTab) {
+                            onNavigateToPublicTab('albums', album.id);
+                          } else if (album.coverUrl) {
+                            setZoomImage({ url: album.coverUrl, title: album.title });
+                          }
+                        }}
+                        className="group bg-slate-50 border border-slate-200 hover:border-blue-300 rounded-2xl overflow-hidden hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="aspect-video w-full bg-slate-200 relative overflow-hidden">
+                            {album.coverUrl ? (
+                              <img 
+                                src={normalizeImageUrl(album.coverUrl)} 
+                                alt={album.title} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                <Camera size={24} />
+                              </div>
+                            )}
+                            <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded-lg backdrop-blur-xs">
+                              {album.photos?.length || 0} ảnh
+                            </span>
+                          </div>
+                          <div className="p-3 space-y-1">
+                            <h4 className="text-xs font-black text-slate-800 line-clamp-1 group-hover:text-blue-600 transition">
+                              {album.title}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 line-clamp-2">{album.description || 'Hoạt động trải nghiệm tập thể'}</p>
+                          </div>
                         </div>
-                        <div className="p-3 space-y-1">
-                          <h4 className="text-xs font-black text-slate-800 line-clamp-1 group-hover:text-blue-600 transition">
-                            {album.title}
-                          </h4>
-                          <p className="text-[10px] text-slate-400 line-clamp-2">{album.description || 'Hoạt động trải nghiệm tập thể'}</p>
+
+                        <div className="px-3 pb-3 pt-1 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-blue-600">
+                          <span>Xem ảnh chi tiết</span>
+                          <ExternalLink size={11} />
                         </div>
                       </div>
                     ))}
@@ -1369,6 +1516,234 @@ export default function StudentPortalDetail({
               <p className="text-slate-500 text-[11px] leading-relaxed">
                 Đăng ký tham gia CLB STEM, Nghệ thuật, Thể thao và theo dõi lịch sinh hoạt ngoại khóa.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CHI TIẾT BÀI VIẾT THÔNG BÁO / HOẠT ĐỘNG (PUBLIC ARTICLE READER) */}
+      {/* ========================================================================= */}
+      {readingAnnouncement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col border border-slate-100">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen size={20} className="text-blue-200" />
+                <span className="text-xs font-black uppercase tracking-wider text-blue-100">Chi tiết bài viết thông báo</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReadingAnnouncement(null)}
+                className="p-1.5 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 font-black text-[10px] rounded-full uppercase border border-amber-200/60">
+                    {readingAnnouncement.category}
+                  </span>
+                  {readingAnnouncement.isNew && (
+                    <span className="px-2 py-0.5 bg-rose-500 text-white font-black text-[9px] rounded-full uppercase">
+                      Mới cập nhật
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+                  <Calendar size={13} />
+                  <span>{readingAnnouncement.date}</span>
+                </div>
+              </div>
+
+              <h2 className="text-lg font-black text-slate-900 leading-snug">
+                {readingAnnouncement.title}
+              </h2>
+
+              {/* Main Content */}
+              <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-line space-y-3 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/60 font-medium">
+                {readingAnnouncement.content}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200/70 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setReadingAnnouncement(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              {onNavigateToPublicTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const annId = readingAnnouncement.id;
+                    setReadingAnnouncement(null);
+                    onNavigateToPublicTab('news', annId);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <ExternalLink size={14} />
+                  <span>Mở trên Cổng tin tức Web</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CHI TIẾT ĐỊNH HƯỚNG & KẾ HOẠCH TUẦN */}
+      {/* ========================================================================= */}
+      {readingPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col border border-slate-100">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award size={20} className="text-blue-200" />
+                <span className="text-xs font-black uppercase tracking-wider text-blue-100">
+                  Lịch trình & Kế hoạch Tuần {readingPlan.weekNumber}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReadingPlan(null)}
+                className="p-1.5 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto custom-scrollbar space-y-4 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <h3 className="text-base font-black text-blue-950">
+                  Tuần {readingPlan.weekNumber}: {readingPlan.title}
+                </h3>
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 font-mono font-bold rounded-lg text-xs">
+                  {readingPlan.dateRange}
+                </span>
+              </div>
+
+              {readingPlan.objectives && (
+                <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-100 space-y-1.5">
+                  <h4 className="font-black text-blue-900 flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 size={14} className="text-blue-600" />
+                    Mục tiêu & Trọng tâm tuần
+                  </h4>
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-line">{readingPlan.objectives}</p>
+                </div>
+              )}
+
+              {readingPlan.teacherNotes && (
+                <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-1.5">
+                  <h4 className="font-black text-amber-900 flex items-center gap-1.5 text-xs">
+                    <AlertCircle size={14} className="text-amber-600" />
+                    Dặn dò & Lời nhắn của GVCN
+                  </h4>
+                  <p className="text-amber-950 leading-relaxed whitespace-pre-line">{readingPlan.teacherNotes}</p>
+                </div>
+              )}
+
+              {readingPlan.activities && readingPlan.activities.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px]">
+                    Lịch trình công việc các ngày trong tuần
+                  </h4>
+                  <div className="space-y-2">
+                    {readingPlan.activities.map((act, i) => (
+                      <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <div className="flex justify-between items-center font-bold text-slate-800">
+                          <span>{act.day || `Mục ${i + 1}`}</span>
+                          <span className="text-[10px] text-slate-400 font-normal">{act.time || ''}</span>
+                        </div>
+                        <p className="text-slate-600 leading-relaxed">{act.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {readingPlan.content && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <FileText size={14} className="text-blue-600" />
+                    Lịch trình & Phân công nhiệm vụ chi tiết
+                  </h4>
+                  <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl leading-relaxed whitespace-pre-wrap text-slate-700 font-medium text-xs">
+                    {readingPlan.content}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200/70 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setReadingPlan(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              {onNavigateToPublicTab && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pId = readingPlan.id;
+                    setReadingPlan(null);
+                    onNavigateToPublicTab('plans', pId);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                >
+                  <ExternalLink size={14} />
+                  <span>Mở trên Kế hoạch tuần Web</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: IMAGE LIGHTBOX ZOOM */}
+      {/* ========================================================================= */}
+      {zoomImage && (
+        <div 
+          onClick={() => setZoomImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[90vh] bg-black/90 rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex flex-col"
+          >
+            <div className="p-3 bg-black/60 text-white flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-200">{zoomImage.title || 'Hình ảnh hoạt động'}</span>
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="p-1 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-2 flex items-center justify-center overflow-auto max-h-[80vh]">
+              <img 
+                src={normalizeImageUrl(zoomImage.url)} 
+                alt={zoomImage.title || 'Zoom'} 
+                className="max-h-full max-w-full object-contain rounded-lg shadow-lg"
+                referrerPolicy="no-referrer"
+              />
             </div>
           </div>
         </div>
