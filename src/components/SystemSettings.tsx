@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { SheetSyncConfig, Student, ViolationRecord, WeeklyPlan, StudentTask, ViolationType, Teacher, SchoolYear, ClassItem, SystemUser } from '../types';
-import { Settings, Users, ShieldAlert, Database, Plus, Trash2, CheckCircle2, Save, User, Calendar, BookOpen, GraduationCap, Edit2, Check, X, Sparkles, Key } from 'lucide-react';
+import { SheetSyncConfig, Student, ViolationRecord, WeeklyPlan, StudentTask, ViolationType, Teacher, SchoolYear, ClassItem, SystemUser, DEFAULT_SUBJECTS } from '../types';
+import { Settings, Users, ShieldAlert, Database, Plus, Trash2, CheckCircle2, Save, User, Calendar, BookOpen, GraduationCap, Edit2, Check, X, Sparkles, Key, RotateCcw } from 'lucide-react';
 import { getWeekConfig, saveWeekConfig } from '../utils/weekUtils';
 import { db, onSnapshot, doc, setDoc, collection, getDocs } from '../lib/firebase';
 import { CustomConfirmModal } from './CustomConfirmModal';
@@ -40,6 +40,8 @@ interface SystemSettingsProps {
   users: SystemUser[];
   onAddUser: (user: SystemUser) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
+  subjects?: string[];
+  onUpdateSubjects?: (subjects: string[]) => void;
 }
 
 export default function SystemSettings({
@@ -69,9 +71,73 @@ export default function SystemSettings({
   onUpdateUserPassword,
   users,
   onAddUser,
-  onDeleteUser
+  onDeleteUser,
+  subjects = DEFAULT_SUBJECTS,
+  onUpdateSubjects
 }: SystemSettingsProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'officers' | 'violations' | 'cleanup' | 'security'>('profile');
+  const [activeSubTab, setActiveSubTab] = useState<'profile' | 'officers' | 'violations' | 'subjects' | 'cleanup' | 'security'>('profile');
+
+  // --- MÔN HỌC (SUBJECTS) STATE & HANDLERS IN SETTINGS ---
+  const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [editingSubjectIndex, setEditingSubjectIndex] = useState<number | null>(null);
+  const [editingSubjectValue, setEditingSubjectValue] = useState('');
+  const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<string | null>(null);
+
+  const POPULAR_SUGGESTIONS = [
+    'Giáo dục thể chất', 'GDQP-AN', 'Công nghệ', 'Âm nhạc', 'Mỹ thuật', 'Hoạt động TN-HN', 'Ngoại ngữ 2', 'Tiếng Pháp', 'Tiếng Trung'
+  ];
+
+  const handleAddSubjectSettings = (nameToAdd?: string) => {
+    const raw = (nameToAdd || newSubjectInput).trim();
+    if (!raw) {
+      triggerMessage('Vui lòng nhập tên môn học!', true);
+      return;
+    }
+    if (subjects.some(s => s.toLowerCase() === raw.toLowerCase())) {
+      triggerMessage(`Môn "${raw}" đã tồn tại!`, true);
+      return;
+    }
+    const updated = [...subjects, raw];
+    if (onUpdateSubjects) onUpdateSubjects(updated);
+    setNewSubjectInput('');
+    triggerMessage(`Đã thêm môn "${raw}" vào danh mục`);
+  };
+
+  const handleSaveEditSubjectSettings = (index: number) => {
+    const raw = editingSubjectValue.trim();
+    if (!raw) {
+      triggerMessage('Tên môn học không được để trống!', true);
+      return;
+    }
+    if (subjects.some((s, idx) => idx !== index && s.toLowerCase() === raw.toLowerCase())) {
+      triggerMessage(`Môn "${raw}" đã tồn tại!`, true);
+      return;
+    }
+    const updated = [...subjects];
+    updated[index] = raw;
+    if (onUpdateSubjects) onUpdateSubjects(updated);
+    setEditingSubjectIndex(null);
+    setEditingSubjectValue('');
+    triggerMessage(`Đã đổi tên môn thành "${raw}"`);
+  };
+
+  const handleConfirmDeleteSubjectSettings = () => {
+    if (!confirmDeleteSubject) return;
+    if (subjects.length <= 1) {
+      triggerMessage('Danh mục môn học phải giữ lại ít nhất 1 môn!', true);
+      setConfirmDeleteSubject(null);
+      return;
+    }
+    const updated = subjects.filter(s => s !== confirmDeleteSubject);
+    if (onUpdateSubjects) onUpdateSubjects(updated);
+    triggerMessage(`Đã xóa môn "${confirmDeleteSubject}" khỏi danh mục`);
+    setConfirmDeleteSubject(null);
+  };
+
+  const handleResetSubjectsSettings = () => {
+    if (onUpdateSubjects) onUpdateSubjects([...DEFAULT_SUBJECTS]);
+    triggerMessage('Đã khôi phục 10 môn chuẩn Bộ GD&ĐT');
+  };
 
   // --- BAN CÁN SỰ LỚP (OFFICERS) STATE & HANDLERS IN SETTINGS ---
   const classStudents = students.filter(s => s.classId === activeClassId && (s.status === 'Đang học' || !s.status || s.status.trim() === ''));
@@ -813,6 +879,14 @@ export default function SystemSettings({
             }`}
           >
             <ShieldAlert size={14} /> Danh mục lỗi phạt
+          </button>
+          <button
+            onClick={() => setActiveSubTab('subjects')}
+            className={`px-4 py-2 rounded-full transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'subjects' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <BookOpen size={14} /> Danh mục Môn học
           </button>
           <button
             onClick={() => setActiveSubTab('cleanup')}
@@ -1599,7 +1673,188 @@ export default function SystemSettings({
         </div>
       )}
 
+      {activeSubTab === 'subjects' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+          {/* Add Subject Card */}
+          <div className="bg-[#121212] rounded-2xl border border-white/5 p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+              <BookOpen size={16} className="text-amber-500" />
+              <h4 className="text-xs uppercase tracking-widest text-white font-semibold">Thêm môn học mới</h4>
+            </div>
 
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddSubjectSettings();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-widest text-white/40 block">Tên môn học</label>
+                <input
+                  type="text"
+                  value={newSubjectInput}
+                  onChange={(e) => setNewSubjectInput(e.target.value)}
+                  placeholder="Ví dụ: GDQP-AN, Âm nhạc, Mỹ thuật..."
+                  className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Plus size={14} />
+                <span>Thêm vào danh mục</span>
+              </button>
+            </form>
+
+            {/* Quick popular chips */}
+            <div className="pt-2 border-t border-white/5">
+              <div className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Sparkles size={11} className="text-amber-400" />
+                <span>Gợi ý môn phổ biến:</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_SUGGESTIONS
+                  .filter(s => !subjects.some(curr => curr.toLowerCase() === s.toLowerCase()))
+                  .map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => handleAddSubjectSettings(s)}
+                      className="px-2.5 py-1 bg-white/5 hover:bg-amber-500/10 text-white/70 hover:text-amber-300 border border-white/10 hover:border-amber-500/30 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={10} className="text-amber-400" />
+                      <span>{s}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={handleResetSubjectsSettings}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw size={12} />
+                <span>Khôi phục 10 môn chuẩn Bộ GD&ĐT</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Subjects Table */}
+          <div className="bg-[#121212] rounded-2xl border border-white/5 p-5 lg:col-span-2 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <div className="flex items-center gap-2">
+                <BookOpen size={16} className="text-amber-500" />
+                <h4 className="text-xs uppercase tracking-widest text-white font-semibold">
+                  Danh mục Môn học hiện hành ({subjects.length} môn)
+                </h4>
+              </div>
+              <span className="text-[10px] text-white/40 font-mono">Đồng bộ tự động với bảng chấm điểm</span>
+            </div>
+
+            <div className="max-h-[420px] overflow-y-auto rounded-xl border border-white/5 custom-scrollbar">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-white/[0.02] text-white/40 font-mono uppercase tracking-widest border-b border-white/5">
+                    <th className="p-3 w-16 text-center">STT</th>
+                    <th className="p-3">Tên môn học</th>
+                    <th className="p-3 text-center w-28">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {subjects.map((subj, index) => {
+                    const isEditing = editingSubjectIndex === index;
+                    return (
+                      <tr key={subj + index} className="hover:bg-white/[0.01] transition-colors">
+                        <td className="p-3 text-center font-mono font-bold text-amber-500">
+                          {(index + 1).toString().padStart(2, '0')}
+                        </td>
+                        <td className="p-3 text-white/90 font-medium">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 max-w-sm">
+                              <input
+                                type="text"
+                                value={editingSubjectValue}
+                                onChange={(e) => setEditingSubjectValue(e.target.value)}
+                                className="flex-1 bg-black/40 border border-amber-500 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEditSubjectSettings(index)}
+                                className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md transition cursor-pointer"
+                                title="Lưu"
+                              >
+                                <Check size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubjectIndex(null);
+                                  setEditingSubjectValue('');
+                                }}
+                                className="p-1 bg-white/10 hover:bg-white/20 text-white/60 rounded-md transition cursor-pointer"
+                                title="Hủy"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-semibold text-white/90">{subj}</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {!isEditing && (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubjectIndex(index);
+                                  setEditingSubjectValue(subj);
+                                }}
+                                className="text-white/30 hover:text-amber-400 p-1.5 rounded-lg hover:bg-amber-500/10 transition cursor-pointer"
+                                title="Sửa tên môn"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSubject(subj)}
+                                className="text-white/30 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
+                                title="Xóa môn học"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation modal for deleting subject in settings */}
+      {confirmDeleteSubject && (
+        <CustomConfirmModal
+          isOpen={!!confirmDeleteSubject}
+          title="Xác nhận xóa môn học"
+          message={`Bạn có chắc chắn muốn xóa môn "${confirmDeleteSubject}" khỏi danh mục môn học không? Điểm số cũ (nếu có) vẫn được lưu trữ an toàn trong hồ sơ học sinh.`}
+          confirmLabel="Xóa môn học"
+          cancelLabel="Hủy bỏ"
+          onConfirm={handleConfirmDeleteSubjectSettings}
+          onCancel={() => setConfirmDeleteSubject(null)}
+          type="danger"
+        />
+      )}
 
       {activeSubTab === 'cleanup' && (
         <div className="space-y-6">
