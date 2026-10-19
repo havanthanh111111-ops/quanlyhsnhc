@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Student, AcademicUpdate, GPAEntry } from '../types';
+import { Student, AcademicUpdate, GPAEntry, DEFAULT_SUBJECTS } from '../types';
 import { 
   Plus, 
   Save, 
@@ -19,7 +19,12 @@ import {
   FileSpreadsheet,
   Check,
   AlertTriangle,
-  UserPlus
+  UserPlus,
+  Edit2,
+  Trash2,
+  BookOpen,
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 
@@ -30,11 +35,10 @@ interface AcademicManagerProps {
   onUpdateAcademicUpdate: (update: AcademicUpdate) => void;
   onDeleteAcademicUpdate: (id: string) => void;
   isReadOnly?: boolean;
+  subjects?: string[];
+  onUpdateSubjects?: (subjects: string[]) => void;
 }
 
-const DEFAULT_SUBJECTS = [
-  'Toán', 'Ngữ văn', 'Tiếng Anh', 'Vật lý', 'Hóa học', 'Sinh học', 'Lịch sử', 'Địa lý', 'Tin học', 'GDKT&PL'
-];
 
 const SUBJECT_CLEAN_MAP: Record<string, string> = {
   toan: 'Toán',
@@ -98,10 +102,125 @@ export default function AcademicManager({
   onUpdateAcademicUpdate,
   onDeleteAcademicUpdate,
   isReadOnly = false,
+  subjects: propSubjects,
+  onUpdateSubjects,
 }: AcademicManagerProps) {
-  const [selectedSubject, setSelectedSubject] = useState('Toán');
+  const activeSubjects = propSubjects && propSubjects.length > 0 ? propSubjects : DEFAULT_SUBJECTS;
+  const [selectedSubject, setSelectedSubject] = useState(activeSubjects[0] || 'Toán');
   const [selectedRound, setSelectedRound] = useState('Giữa Học kỳ I');
   
+  // Custom subject management
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [editingSubjectIndex, setEditingSubjectIndex] = useState<number | null>(null);
+  const [editingSubjectValue, setEditingSubjectValue] = useState('');
+  const [subjectError, setSubjectError] = useState('');
+  const [subjectSuccess, setSubjectSuccess] = useState('');
+  const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<{ name: string; count: number } | null>(null);
+
+  const POPULAR_SUBJECT_SUGGESTIONS = [
+    'Giáo dục thể chất',
+    'GDQP-AN',
+    'Công nghệ',
+    'Âm nhạc',
+    'Mỹ thuật',
+    'Hoạt động TN-HN',
+    'Ngoại ngữ 2',
+    'Tiếng Pháp',
+    'Tiếng Trung',
+    'Tin học ứng dụng',
+  ];
+
+  // Auto-sync selectedSubject if current one was removed
+  useEffect(() => {
+    if (selectedSubject !== 'Điểm trung bình' && activeSubjects.length > 0 && !activeSubjects.includes(selectedSubject)) {
+      setSelectedSubject(activeSubjects[0]);
+    }
+  }, [activeSubjects, selectedSubject]);
+
+  const handleAddSubject = (nameToAdd?: string) => {
+    const raw = (nameToAdd || newSubjectInput).trim();
+    if (!raw) {
+      setSubjectError('Vui lòng nhập tên môn học!');
+      return;
+    }
+    if (activeSubjects.some(s => s.toLowerCase() === raw.toLowerCase())) {
+      setSubjectError(`Môn "${raw}" đã có trong danh mục!`);
+      return;
+    }
+    const updated = [...activeSubjects, raw];
+    if (onUpdateSubjects) {
+      onUpdateSubjects(updated);
+    }
+    setNewSubjectInput('');
+    setSubjectError('');
+    setSubjectSuccess(`Đã thêm môn "${raw}" thành công!`);
+    setTimeout(() => setSubjectSuccess(''), 3000);
+  };
+
+  const handleSaveEditSubject = (index: number) => {
+    const raw = editingSubjectValue.trim();
+    if (!raw) {
+      setSubjectError('Tên môn học không được để trống!');
+      return;
+    }
+    const oldName = activeSubjects[index];
+    if (activeSubjects.some((s, idx) => idx !== index && s.toLowerCase() === raw.toLowerCase())) {
+      setSubjectError(`Môn "${raw}" đã tồn tại trong danh mục!`);
+      return;
+    }
+    const updated = [...activeSubjects];
+    updated[index] = raw;
+    if (onUpdateSubjects) {
+      onUpdateSubjects(updated);
+    }
+    if (selectedSubject === oldName) {
+      setSelectedSubject(raw);
+    }
+    setEditingSubjectIndex(null);
+    setEditingSubjectValue('');
+    setSubjectError('');
+    setSubjectSuccess(`Đã đổi tên môn thành "${raw}"!`);
+    setTimeout(() => setSubjectSuccess(''), 3000);
+  };
+
+  const handleDeleteSubjectRequest = (subjName: string) => {
+    if (activeSubjects.length <= 1) {
+      setSubjectError('Danh mục môn học phải giữ lại ít nhất 1 môn!');
+      return;
+    }
+    let scoreCount = 0;
+    academicUpdates.forEach(update => {
+      if (update.gpaList.some(g => g.subject === subjName && g.score !== undefined)) {
+        scoreCount++;
+      }
+    });
+    setConfirmDeleteSubject({ name: subjName, count: scoreCount });
+  };
+
+  const handleConfirmDeleteSubject = () => {
+    if (!confirmDeleteSubject) return;
+    const subjName = confirmDeleteSubject.name;
+    const updated = activeSubjects.filter(s => s !== subjName);
+    if (onUpdateSubjects) {
+      onUpdateSubjects(updated);
+    }
+    if (selectedSubject === subjName) {
+      setSelectedSubject(updated[0] || 'Điểm trung bình');
+    }
+    setConfirmDeleteSubject(null);
+    setSubjectSuccess(`Đã xóa môn "${subjName}" khỏi danh mục!`);
+    setTimeout(() => setSubjectSuccess(''), 3000);
+  };
+
+  const handleResetDefaultSubjects = () => {
+    if (onUpdateSubjects) {
+      onUpdateSubjects([...DEFAULT_SUBJECTS]);
+    }
+    setSubjectSuccess('Đã khôi phục 10 môn chuẩn Bộ GD&ĐT!');
+    setTimeout(() => setSubjectSuccess(''), 3000);
+  };
+
   // Custom round management
   const [roundsList, setRoundsList] = useState<string[]>([]);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
@@ -356,11 +475,11 @@ export default function AcademicManager({
   };
 
   const downloadMultiSubjectTemplate = () => {
-    const headers = ['Mã HS', 'Họ và Tên', ...DEFAULT_SUBJECTS, 'Đợt vào điểm'];
+    const headers = ['Mã HS', 'Họ và Tên', ...activeSubjects, 'Đợt vào điểm'];
     const rows = students.map(s => {
       const update = academicUpdates.find(u => u.studentId === s.id && u.title === selectedRound);
       const rowData: string[] = [s.id, s.name];
-      DEFAULT_SUBJECTS.forEach(subj => {
+      activeSubjects.forEach(subj => {
         const score = update?.gpaList.find(g => g.subject === subj)?.score;
         rowData.push(score !== undefined ? score.toString() : '');
       });
@@ -442,7 +561,7 @@ export default function AcademicManager({
     
     if (scoreIdx !== -1) {
       const headerName = headers[scoreIdx];
-      const match = DEFAULT_SUBJECTS.find(subj => headerName.toLowerCase().includes(subj.toLowerCase()));
+      const match = activeSubjects.find(subj => headerName.toLowerCase().includes(subj.toLowerCase()));
       const singleSubjectName = match || selectedSubject;
       parsedSubjects.push(singleSubjectName);
       colIndexToSubject[scoreIdx] = singleSubjectName;
@@ -458,7 +577,7 @@ export default function AcademicManager({
           }
           colIndexToSubject[idx] = standardName;
         } else {
-          const directMatch = DEFAULT_SUBJECTS.find(subj => cleanKey(subj) === h || h.includes(cleanKey(subj)));
+          const directMatch = activeSubjects.find(subj => cleanKey(subj) === h || h.includes(cleanKey(subj)));
           if (directMatch) {
             if (!parsedSubjects.includes(directMatch)) {
               parsedSubjects.push(directMatch);
@@ -674,19 +793,45 @@ export default function AcademicManager({
       <div className="bg-white p-5 rounded-3xl border border-slate-200/60 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
           {/* Choose Subject */}
-          <div className="flex flex-col gap-1 w-full sm:w-48">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chọn môn học</span>
-            <select
-              id="subject-select"
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full text-xs bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm font-semibold"
-            >
-              {DEFAULT_SUBJECTS.map(subj => (
-                <option key={subj} value={subj} className="bg-white text-slate-800">{subj}</option>
-              ))}
-              <option value="Điểm trung bình" className="bg-white text-amber-700 font-bold">⭐ Điểm trung bình (GPA)</option>
-            </select>
+          <div className="flex flex-col gap-1 w-full sm:w-64">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chọn môn học</span>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  id="btn-open-manage-subjects-header"
+                  onClick={() => setShowSubjectModal(true)}
+                  className="text-[10px] text-amber-600 hover:text-amber-700 font-bold flex items-center gap-0.5 cursor-pointer hover:underline transition"
+                  title="Thêm hoặc xóa môn học trong danh mục"
+                >
+                  <Plus size={11} /> Quản lý môn
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <select
+                id="subject-select"
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="flex-1 text-xs bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500 focus:bg-white transition shadow-sm font-semibold cursor-pointer"
+              >
+                {activeSubjects.map(subj => (
+                  <option key={subj} value={subj} className="bg-white text-slate-800">{subj}</option>
+                ))}
+                <option value="Điểm trung bình" className="bg-white text-amber-700 font-bold">⭐ Điểm trung bình (GPA)</option>
+              </select>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  id="btn-manage-subjects-plus"
+                  onClick={() => setShowSubjectModal(true)}
+                  className="px-3 bg-white hover:bg-slate-50 border border-slate-200 text-amber-600 hover:border-amber-400 rounded-xl transition flex items-center justify-center shrink-0 shadow-sm cursor-pointer"
+                  title="Thêm, sửa hoặc xóa môn học"
+                >
+                  <Plus size={16} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Exam Round Update Selection */}
@@ -1026,6 +1171,289 @@ export default function AcademicManager({
         </div>
 
       </div>
+
+      {/* MODAL: QUẢN LÝ DANH MỤC MÔN HỌC */}
+      {showSubjectModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-xl shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
+            <button 
+              onClick={() => {
+                setShowSubjectModal(false);
+                setSubjectError('');
+                setSubjectSuccess('');
+                setEditingSubjectIndex(null);
+              }}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="border-b border-slate-100 pb-3 mb-4 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800 uppercase tracking-wide">
+                    Cài đặt & Quản lý danh mục Môn học
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Thêm môn mới theo phân phối chương trình, sửa tên môn hoặc xóa các môn không học.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages */}
+            {subjectError && (
+              <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle size={15} className="shrink-0 text-rose-500" />
+                <span>{subjectError}</span>
+              </div>
+            )}
+            {subjectSuccess && (
+              <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs flex items-center gap-2">
+                <CheckCircle2 size={15} className="shrink-0 text-emerald-500" />
+                <span>{subjectSuccess}</span>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-5 custom-scrollbar">
+              {/* Form Thêm môn mới */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>Thêm môn học mới:</span>
+                </div>
+                
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAddSubject();
+                  }}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={newSubjectInput}
+                    onChange={(e) => {
+                      setNewSubjectInput(e.target.value);
+                      setSubjectError('');
+                    }}
+                    placeholder="Nhập tên môn học (vd: GDQP-AN, Âm nhạc, Mỹ thuật...)"
+                    className="flex-1 text-xs bg-white border border-slate-200 text-slate-800 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition shadow-sm font-medium"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Plus size={15} />
+                    <span>Thêm môn</span>
+                  </button>
+                </form>
+
+                {/* Popular Suggestions */}
+                <div className="pt-1">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <Sparkles size={11} className="text-amber-500" />
+                    <span>Gợi ý môn học phổ biến (bấm để thêm nhanh):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {POPULAR_SUBJECT_SUGGESTIONS
+                      .filter(s => !activeSubjects.some(curr => curr.toLowerCase() === s.toLowerCase()))
+                      .map(subj => (
+                        <button
+                          key={subj}
+                          type="button"
+                          onClick={() => handleAddSubject(subj)}
+                          className="px-2.5 py-1 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-slate-600 hover:text-amber-700 rounded-lg text-[11px] font-medium transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        >
+                          <Plus size={10} className="text-amber-500" />
+                          <span>{subj}</span>
+                        </button>
+                      ))}
+                    {POPULAR_SUBJECT_SUGGESTIONS.every(s => activeSubjects.some(curr => curr.toLowerCase() === s.toLowerCase())) && (
+                      <span className="text-[11px] text-slate-400 italic">Đã thêm đầy đủ các môn gợi ý phổ biến.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Danh sách các môn hiện tại */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Danh sách môn học hiện tại ({activeSubjects.length} môn)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultSubjects}
+                    className="text-[11px] text-slate-500 hover:text-amber-600 font-semibold flex items-center gap-1 cursor-pointer transition hover:underline"
+                    title="Khôi phục lại 10 môn chuẩn theo chương trình phổ thông"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Khôi phục 10 môn mặc định</span>
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
+                  {activeSubjects.map((subj, index) => {
+                    const isEditing = editingSubjectIndex === index;
+                    // Calculate records count
+                    let count = 0;
+                    academicUpdates.forEach(update => {
+                      if (update.gpaList.some(g => g.subject === subj && g.score !== undefined)) {
+                        count++;
+                      }
+                    });
+
+                    return (
+                      <div 
+                        key={subj + index}
+                        className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50/70 transition"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
+                            {(index + 1).toString().padStart(2, '0')}
+                          </span>
+
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 flex-1">
+                              <input
+                                type="text"
+                                value={editingSubjectValue}
+                                onChange={(e) => setEditingSubjectValue(e.target.value)}
+                                className="flex-1 text-xs bg-white border border-amber-400 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEditSubject(index)}
+                                className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition cursor-pointer"
+                                title="Lưu thay đổi"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubjectIndex(null);
+                                  setEditingSubjectValue('');
+                                }}
+                                className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition cursor-pointer"
+                                title="Hủy"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="text-xs font-bold text-slate-800 truncate">{subj}</span>
+                              {count > 0 ? (
+                                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium shrink-0">
+                                  {count} điểm đã nhập
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full shrink-0">
+                                  Chưa có điểm
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {!isEditing && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSubjectIndex(index);
+                                setEditingSubjectValue(subj);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition cursor-pointer"
+                              title="Đổi tên môn học"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSubjectRequest(subj)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Xóa môn học này"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="pt-4 border-t border-slate-100 mt-4 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-400">
+                Môn học được lưu tự động và đồng bộ cho toàn bộ hệ thống
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubjectModal(false);
+                  setSubjectError('');
+                  setSubjectSuccess('');
+                  setEditingSubjectIndex(null);
+                }}
+                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE SUBJECT MODAL */}
+      {confirmDeleteSubject && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl shrink-0">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-slate-900">Xác nhận xóa môn học?</h4>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  Bạn đang chuẩn bị xóa môn <strong className="text-rose-600 font-bold">"{confirmDeleteSubject.name}"</strong> khỏi danh mục môn học.
+                </p>
+                {confirmDeleteSubject.count > 0 && (
+                  <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed">
+                    ⚠️ <strong>Lưu ý:</strong> Đang có <strong>{confirmDeleteSubject.count} học sinh</strong> có điểm của môn này. Điểm số cũ vẫn được bảo lưu an toàn trong cơ sở dữ liệu nhưng môn này sẽ không còn hiển thị ở bảng nhập điểm nữa.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteSubject(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSubject}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              >
+                Xác nhận xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: ADD NEW EXAM ROUND */}
       {showAddRoundModal && (
