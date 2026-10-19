@@ -5,13 +5,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Student, ViolationRecord, StudentTask, ClassItem, SchoolYear, AcademicUpdate, GPAEntry } from '../types';
-import { Plus, Search, Edit2, Trash2, User, Phone, MapPin, Calendar, Heart, ShieldAlert, CheckCircle, Download, FileText, Printer, Check, X, ArrowRightLeft, Upload, Camera, BookOpen, ArrowRight, ArrowLeft, Key, Lock, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, User, Phone, MapPin, Calendar, Heart, ShieldAlert, CheckCircle, Download, FileText, Printer, Check, X, ArrowRightLeft, Upload, Camera, BookOpen, ArrowRight, ArrowLeft, Key, Lock, ShieldCheck, RefreshCw, FileSpreadsheet, Copy } from 'lucide-react';
 import { CustomConfirmModal } from './CustomConfirmModal';
 import StudentAcademicTracker from './StudentAcademicTracker';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { getAccessToken, googleSignIn } from '../services/authService';
 import { normalizeImageUrl } from '../lib/imageUtils';
+import { 
+  exportStudentReportToWord, 
+  exportStudentReportToExcel, 
+  copyReportForGoogleDocsSheets, 
+  exportClassStudentsToExcel, 
+  exportClassStudentsToWord 
+} from '../utils/documentExport';
 
 const getDriveImageUrl = (urlOrId: string | undefined): string => {
   return normalizeImageUrl(urlOrId);
@@ -87,6 +94,7 @@ interface StudentManagerProps {
   onDeleteAcademicUpdate?: (id: string) => void;
   imageFolderId?: string;
   isReadOnly?: boolean;
+  subjects?: string[];
 }
 
 export default function StudentManager({
@@ -107,6 +115,7 @@ export default function StudentManager({
   onDeleteAcademicUpdate,
   imageFolderId = '',
   isReadOnly = false,
+  subjects = [],
 }: StudentManagerProps) {
   const [search, setSearch] = useState('');
   const [filterGender, setFilterGender] = useState<string>('Tất cả');
@@ -201,6 +210,7 @@ export default function StudentManager({
   // PDF download fallback state
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [pdfFilename, setPdfFilename] = useState<string>('');
+  const [copyToast, setCopyToast] = useState<string | null>(null);
 
   const formatReportFooterDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -381,6 +391,101 @@ export default function StudentManager({
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+
+  const handleExportWord = () => {
+    if (!selectedStudent || !stats) return;
+    exportStudentReportToWord({
+      schoolName,
+      className,
+      reportType,
+      student: selectedStudent,
+      reportDate,
+      teacherComment,
+      stats: {
+        totalDeductions: stats.totalDeductions,
+        violationsCount: stats.violationsCount,
+        completedTasks: stats.completedTasks,
+        taskList: stats.taskList,
+        history: stats.history
+      }
+    });
+  };
+
+  const handleExportExcel = () => {
+    if (!selectedStudent || !stats) return;
+    exportStudentReportToExcel({
+      schoolName,
+      className,
+      reportType,
+      student: selectedStudent,
+      reportDate,
+      teacherComment,
+      stats: {
+        totalDeductions: stats.totalDeductions,
+        violationsCount: stats.violationsCount,
+        completedTasks: stats.completedTasks,
+        taskList: stats.taskList,
+        history: stats.history
+      }
+    });
+  };
+
+  const handleCopyReportForGoogleDocs = async () => {
+    if (!selectedStudent || !stats) return;
+    const success = await copyReportForGoogleDocsSheets({
+      schoolName,
+      className,
+      reportType,
+      student: selectedStudent,
+      reportDate,
+      teacherComment,
+      stats: {
+        totalDeductions: stats.totalDeductions,
+        violationsCount: stats.violationsCount,
+        completedTasks: stats.completedTasks,
+        taskList: stats.taskList,
+        history: stats.history
+      }
+    });
+    if (success) {
+      setCopyToast('Đã sao chép báo cáo! Bạn có thể mở Google Docs hoặc Google Sheets và nhấn phím Ctrl + V để dán ngay.');
+      setTimeout(() => setCopyToast(null), 5000);
+    } else {
+      alert('Không thể sao chép vào bộ nhớ tạm. Bạn vui lòng sử dụng nút "Xuất file Word" hoặc "Xuất Excel".');
+    }
+  };
+
+  const handleExportClassStudentsExcel = () => {
+    const statsMap: Record<string, any> = {};
+    filteredStudents.forEach(s => {
+      const st = getStudentStats(s.id);
+      statsMap[s.id] = {
+        totalDeductions: st.totalDeductions,
+        violationsCount: st.violationsCount,
+        completedTasks: st.completedTasks,
+        totalTasks: st.taskList.length
+      };
+    });
+    const currentClass = classes.find(c => c.id === activeClassId);
+    const clsName = currentClass?.name || '11A1';
+    exportClassStudentsToExcel(clsName, filteredStudents, statsMap);
+  };
+
+  const handleExportClassStudentsWord = () => {
+    const statsMap: Record<string, any> = {};
+    filteredStudents.forEach(s => {
+      const st = getStudentStats(s.id);
+      statsMap[s.id] = {
+        totalDeductions: st.totalDeductions,
+        violationsCount: st.violationsCount,
+        completedTasks: st.completedTasks,
+        totalTasks: st.taskList.length
+      };
+    });
+    const currentClass = classes.find(c => c.id === activeClassId);
+    const clsName = currentClass?.name || '11A1';
+    exportClassStudentsToWord(clsName, filteredStudents, statsMap);
   };
 
   const handleOpenAdd = () => {
@@ -1014,12 +1119,28 @@ export default function StudentManager({
                 <ArrowRightLeft size={14} /> Chuyển lớp
               </button>
               <button
+                id="btn-export-class-excel"
+                onClick={handleExportClassStudentsExcel}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/20 transition shadow-sm cursor-pointer"
+                title="Xuất danh sách học sinh lớp ra file Excel / Google Sheets (.xlsx)"
+              >
+                <FileSpreadsheet size={13} /> Xuất Excel
+              </button>
+              <button
+                id="btn-export-class-word"
+                onClick={handleExportClassStudentsWord}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl text-xs font-bold border border-blue-500/20 transition shadow-sm cursor-pointer"
+                title="Xuất danh sách học sinh lớp ra file Word (.doc)"
+              >
+                <FileText size={13} /> Xuất Word
+              </button>
+              <button
                 id="btn-reset-all-passwords"
                 onClick={handleResetAllClassPasswords}
                 className="flex items-center gap-1 px-2 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-xl text-xs font-bold border border-amber-500/20 transition shadow-sm"
                 title="Đặt lại mật khẩu toàn bộ học sinh trong lớp về 123"
               >
-                <Key size={13} /> Reset Pass Lớp (123)
+                <Key size={13} /> Reset Pass (123)
               </button>
             </div>
           )}
@@ -1555,11 +1676,11 @@ export default function StudentManager({
                 <button
                   id="btn-export-student-pdf"
                   onClick={handleOpenExportModal}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm border border-emerald-500/20"
-                  title="Xuất báo cáo cá nhân PDF"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm border border-emerald-500/20 cursor-pointer"
+                  title="Xuất báo cáo cá nhân (Word / Excel / PDF)"
                 >
-                  <Download size={14} />
-                  <span>Báo cáo PDF</span>
+                  <FileText size={14} />
+                  <span>Xuất Báo Cáo</span>
                 </button>
                 {!isReadOnly && (
                   <>
@@ -1757,6 +1878,7 @@ export default function StudentManager({
                   onUpdateAcademicUpdate={onUpdateAcademicUpdate || (() => {})}
                   onDeleteAcademicUpdate={onDeleteAcademicUpdate || (() => {})}
                   isReadOnly={isReadOnly}
+                  subjects={subjects}
                 />
               </div>
             )}
@@ -1875,20 +1997,77 @@ export default function StudentManager({
               </div>
 
               {/* Actions */}
-              <div className="pt-4 border-t border-white/5 mt-6 flex flex-col gap-2">
+              <div className="pt-4 border-t border-white/5 mt-6 flex flex-col gap-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-0.5 flex items-center justify-between">
+                  <span>Tùy chọn xuất file & hiệu chỉnh:</span>
+                </div>
+
+                {/* Button 1: Xuất Word (.doc) */}
+                <button
+                  type="button"
+                  onClick={handleExportWord}
+                  className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-between group cursor-pointer"
+                  title="Xuất file Word (.doc) để dễ dàng chỉnh sửa văn bản, tiêu đề, nhận xét trên Microsoft Word hoặc Google Docs"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileText size={15} className="text-blue-200" />
+                    <span>Xuất file Word (.doc)</span>
+                  </span>
+                  <span className="text-[10px] bg-blue-700/60 px-2 py-0.5 rounded text-blue-100 font-normal">Dễ chỉnh sửa</span>
+                </button>
+
+                {/* Button 2: Xuất Excel / Google Sheets (.xlsx) */}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-between group cursor-pointer"
+                  title="Xuất file Excel (.xlsx) với 3 trang tính (Tổng quan, Lỗi nề nếp, Nhiệm vụ) - Dễ dàng mở và chỉnh sửa trong Excel hoặc Google Sheets"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileSpreadsheet size={15} className="text-emerald-200" />
+                    <span>Xuất Excel / Sheets (.xlsx)</span>
+                  </span>
+                  <span className="text-[10px] bg-emerald-700/60 px-2 py-0.5 rounded text-emerald-100 font-normal">3 Sheets</span>
+                </button>
+
+                {/* Button 3: Sao chép cho Google Docs / Sheets */}
+                <button
+                  type="button"
+                  onClick={handleCopyReportForGoogleDocs}
+                  className="w-full py-2.5 px-3 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/30 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-between group cursor-pointer"
+                  title="Sao chép bảng biểu vào bộ nhớ tạm - Mở Google Docs hoặc Sheets và nhấn Ctrl+V để dán ngay"
+                >
+                  <span className="flex items-center gap-2">
+                    <Copy size={15} className="text-purple-300" />
+                    <span>Sao chép bảng (Ctrl + V)</span>
+                  </span>
+                  <span className="text-[10px] bg-purple-500/20 px-2 py-0.5 rounded text-purple-200 font-mono">Dán nhanh</span>
+                </button>
+
+                {/* Toast Feedback */}
+                {copyToast && (
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-[11px] text-center animate-fadeIn leading-relaxed">
+                    {copyToast}
+                  </div>
+                )}
+
+                <div className="h-[1px] bg-white/10 my-0.5" />
+
+                {/* Button 4: In báo cáo / Lưu PDF */}
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                  title="In báo cáo ra giấy hoặc chọn Lưu dưới dạng PDF"
                 >
                   <Printer size={14} />
-                  <span>In báo cáo / Lưu PDF (Nét tinh tế)</span>
+                  <span>In báo cáo / Lưu PDF (A4)</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsExportModalOpen(false)}
-                  className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/60 border border-white/5 rounded-xl text-xs font-medium transition"
+                  className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/60 border border-white/5 rounded-xl text-xs font-medium transition cursor-pointer"
                 >
                   Đóng lại
                 </button>
@@ -1913,9 +2092,37 @@ export default function StudentManager({
 
             {/* Right Column: PDF Canvas Sheet Preview */}
             <div className="lg:w-2/3 p-6 bg-black flex flex-col overflow-hidden">
-              <div className="mb-3 flex justify-between items-center">
-                <span className="text-[10px] uppercase font-semibold text-white/40 tracking-wider">Xem trước tài liệu (Khổ A4)</span>
-                <span className="text-[10px] text-emerald-400 font-mono italic">Thiết kế chuẩn hóa để in ấn</span>
+              <div className="mb-3 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-semibold text-white/40 tracking-wider">Xem trước tài liệu (Khổ A4)</span>
+                  <span className="text-[10px] text-emerald-400 font-mono italic">• Chuẩn văn bản</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleExportWord}
+                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                    title="Xuất file Word (.doc) để chỉnh sửa nội dung trên Word hoặc Google Docs"
+                  >
+                    <FileText size={12} /> Xuất Word
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                    title="Xuất file Excel (.xlsx) / Google Sheets - 3 sheet phân loại"
+                  >
+                    <FileSpreadsheet size={12} /> Xuất Excel / Sheets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    title="In hoặc Lưu PDF"
+                  >
+                    <Printer size={12} /> In / PDF
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-auto rounded-2xl bg-white/5 p-4 border border-white/5 custom-scrollbar">
                 <div 
