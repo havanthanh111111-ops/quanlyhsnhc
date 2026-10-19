@@ -58,7 +58,8 @@ import {
   Teacher,
   SchoolYear,
   DocumentCategory,
-  PhotoAlbum
+  PhotoAlbum,
+  DEFAULT_SUBJECTS
 } from '../types';
 import StudentPortalDetail from './StudentPortalDetail';
 import { initialAlbums } from '../data/initialData';
@@ -99,6 +100,7 @@ interface PublicPortalProps {
   onOpenAdmin: () => void;
   onUpdateStudent?: (student: Student) => void;
   initialSchoolYearId?: string;
+  subjects?: string[];
 }
 
 export default function PublicPortal({
@@ -114,7 +116,8 @@ export default function PublicPortal({
   albums: propAlbums = [],
   onOpenAdmin,
   onUpdateStudent,
-  initialSchoolYearId
+  initialSchoolYearId,
+  subjects = DEFAULT_SUBJECTS
 }: PublicPortalProps) {
   // Navigation states
   const [activeTab, setActiveTab] = useState<'home' | 'about' | 'lookup' | 'stats' | 'timetable' | 'plans' | 'contact' | 'news' | 'archive' | 'albums'>('home');
@@ -1907,7 +1910,7 @@ export default function PublicPortal({
                             onChange={(e) => setAcademicStatsSubject(e.target.value)}
                             className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-blue-600 transition shadow-sm cursor-pointer"
                           >
-                            {['Toán', 'Ngữ văn', 'Tiếng Anh', 'Vật lý', 'Hóa học', 'Sinh học', 'Lịch sử', 'Địa lý', 'Tin học', 'GDKT&PL'].map(subj => (
+                            {(subjects && subjects.length > 0 ? subjects : DEFAULT_SUBJECTS).map(subj => (
                               <option key={subj} value={subj}>{subj}</option>
                             ))}
                             <option value="Điểm trung bình">⭐ Điểm trung bình (GPA)</option>
