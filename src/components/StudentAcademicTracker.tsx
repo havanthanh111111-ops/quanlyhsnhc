@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AcademicUpdate, GPAEntry } from '../types';
+import { AcademicUpdate, GPAEntry, DEFAULT_SUBJECTS } from '../types';
 import { CustomConfirmModal } from './CustomConfirmModal';
 import { 
   Plus, 
@@ -30,20 +30,8 @@ interface StudentAcademicTrackerProps {
   onUpdateAcademicUpdate: (update: AcademicUpdate) => void;
   onDeleteAcademicUpdate: (id: string) => void;
   isReadOnly?: boolean;
+  subjects?: string[];
 }
-
-const DEFAULT_SUBJECTS = [
-  'Toán',
-  'Ngữ văn',
-  'Tiếng Anh',
-  'Vật lý',
-  'Hóa học',
-  'Sinh học',
-  'Lịch sử',
-  'Địa lý',
-  'Tin học',
-  'GDKT&PL'
-];
 
 export default function StudentAcademicTracker({
   studentId,
@@ -52,8 +40,11 @@ export default function StudentAcademicTracker({
   onAddAcademicUpdate,
   onUpdateAcademicUpdate,
   onDeleteAcademicUpdate,
-  isReadOnly = false
+  isReadOnly = false,
+  subjects = DEFAULT_SUBJECTS
 }: StudentAcademicTrackerProps) {
+  const activeSubjects = subjects && subjects.length > 0 ? subjects : DEFAULT_SUBJECTS;
+
   // Filter updates for current student
   const studentUpdates = React.useMemo(() => {
     return academicUpdates
@@ -87,7 +78,7 @@ export default function StudentAcademicTracker({
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [scores, setScores] = useState<Record<string, string>>(() => {
     const s: Record<string, string> = {};
-    DEFAULT_SUBJECTS.forEach(sub => { s[sub] = ''; });
+    activeSubjects.forEach(sub => { s[sub] = ''; });
     return s;
   });
   const [teacherRemarks, setTeacherRemarks] = useState('');
@@ -100,7 +91,7 @@ export default function StudentAcademicTracker({
     setTitle('');
     setDate(new Date().toISOString().split('T')[0]);
     const freshScores: Record<string, string> = {};
-    DEFAULT_SUBJECTS.forEach(sub => { freshScores[sub] = ''; });
+    activeSubjects.forEach(sub => { freshScores[sub] = ''; });
     setScores(freshScores);
     setTeacherRemarks('');
     setIsOpenForm(true);
@@ -114,7 +105,7 @@ export default function StudentAcademicTracker({
     setTitle(update.title);
     setDate(update.date);
     const savedScores: Record<string, string> = {};
-    DEFAULT_SUBJECTS.forEach(sub => {
+    activeSubjects.forEach(sub => {
       const match = update.gpaList.find(g => g.subject === sub);
       savedScores[sub] = match ? match.score.toString() : '';
     });
@@ -138,7 +129,7 @@ export default function StudentAcademicTracker({
     let totalScore = 0;
     let validCount = 0;
 
-    DEFAULT_SUBJECTS.forEach(sub => {
+    activeSubjects.forEach(sub => {
       const parsed = parseFloat(scores[sub] || '0');
       const clampScore = isNaN(parsed) ? 0 : Math.max(0, Math.min(10, parsed));
       gpaList.push({ subject: sub, score: clampScore });
@@ -391,7 +382,7 @@ export default function StudentAcademicTracker({
 
                 {/* Score Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                  {DEFAULT_SUBJECTS.map(subject => {
+                  {activeSubjects.map(subject => {
                     const scoreObj = activeUpdate.gpaList.find(g => g.subject === subject);
                     const score = scoreObj ? scoreObj.score : 0;
                     
@@ -517,7 +508,7 @@ export default function StudentAcademicTracker({
                   Điểm trung bình các môn học (Thang điểm 10)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {DEFAULT_SUBJECTS.map(subject => (
+                  {activeSubjects.map(subject => (
                     <div key={subject} className="bg-[#141414] border border-white/5 rounded-xl p-2.5 flex flex-col justify-between">
                       <label className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-1 truncate text-center">
                         {subject}
@@ -546,7 +537,7 @@ export default function StudentAcademicTracker({
                       // Generate quick automated remark based on grades
                       let total = 0;
                       let count = 0;
-                      DEFAULT_SUBJECTS.forEach(sub => {
+                      activeSubjects.forEach(sub => {
                         const parsed = parseFloat(scores[sub]);
                         if (!isNaN(parsed)) {
                           total += parsed;
