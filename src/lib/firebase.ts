@@ -34,10 +34,10 @@ const isEnvConfigured = !!(envConfig.apiKey && envConfig.projectId);
 const activeConfig = isEnvConfigured ? envConfig : firebaseConfig;
 
 // Initialize Firebase
-const app = initializeApp(activeConfig);
+export const app = initializeApp(activeConfig);
 
 // Silently sign in anonymously to satisfy Firestore security rules
-const auth = getAuth(app);
+export const auth = getAuth(app);
 signInAnonymously(auth).catch((err) => {
   console.warn('Anonymous sign-in failed (ensure Anonymous Auth is enabled in your Firebase console):', err);
 });
