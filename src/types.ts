@@ -214,6 +214,15 @@ export interface StudentCommunityRecord {
   updatedAt?: string;
 }
 
-
-
-
+export const DEFAULT_SUBJECTS: string[] = [
+  'Toán',
+  'Ngữ văn',
+  'Tiếng Anh',
+  'Vật lý',
+  'Hóa học',
+  'Sinh học',
+  'Lịch sử',
+  'Địa lý',
+  'Tin học',
+  'GDKT&PL'
+];
