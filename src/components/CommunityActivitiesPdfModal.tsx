@@ -5,7 +5,11 @@
 
 import React from 'react';
 import { Student, StudentCommunityRecord } from '../types';
-import { Printer, X, FileText, CheckCircle2, HelpCircle } from 'lucide-react';
+import { Printer, X, FileText, CheckCircle2, HelpCircle, FileSpreadsheet } from 'lucide-react';
+import { 
+  exportCommunityActivitiesToWord, 
+  exportCommunityActivitiesToExcel 
+} from '../utils/documentExport';
 
 interface CommunityActivitiesPdfModalProps {
   isOpen: boolean;
@@ -32,6 +36,14 @@ export default function CommunityActivitiesPdfModal({
     window.print();
   };
 
+  const handleExportWord = () => {
+    exportCommunityActivitiesToWord(student, record);
+  };
+
+  const handleExportExcel = () => {
+    exportCommunityActivitiesToExcel(student, record);
+  };
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-5 overflow-y-auto animate-fadeIn">
       <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden text-slate-800">
@@ -52,14 +64,30 @@ export default function CommunityActivitiesPdfModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportWord}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-blue-600/20 active:scale-95"
+              title="Xuất file Word (.doc) - Dễ dàng mở và chỉnh sửa trên Microsoft Word hoặc Google Docs"
+            >
+              <FileText size={15} /> Xuất Word (.doc)
+            </button>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95"
+              title="Xuất file Excel (.xlsx) gồm 2 trang tính - Dễ dàng mở trong Excel hoặc Google Sheets"
+            >
+              <FileSpreadsheet size={15} /> Xuất Excel / Sheets
+            </button>
             <button
               type="button"
               onClick={handlePrint}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-lg shadow-blue-500/25 active:scale-95"
-              title="Mở hộp thoại in trình duyệt - Chọn Lưu dạng PDF để tải file chất lượng cao nhất"
+              className="px-3.5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md active:scale-95"
+              title="Mở hộp thoại in trình duyệt - Chọn Lưu dạng PDF để tải file A4 chất lượng cao"
             >
-              <Printer size={16} /> In / Xuất PDF (2 Trang A4)
+              <Printer size={15} /> In / Lưu PDF
             </button>
             <button
               type="button"
@@ -75,7 +103,7 @@ export default function CommunityActivitiesPdfModal({
         <div className="px-4 py-2 bg-blue-950/60 border-b border-blue-500/20 text-blue-200 text-xs flex items-center gap-2">
           <HelpCircle size={15} className="shrink-0 text-blue-400" />
           <span>
-            <strong>Hướng dẫn in / xuất PDF:</strong> Khi bảng in hiện ra, tại mục <em>Máy in (Destination)</em> bạn chọn <strong>"Lưu dưới dạng PDF" (Save as PDF)</strong> để xuất trọn vẹn văn bản 2 trang chuẩn A4.
+            <strong>Tùy chọn hiệu chỉnh:</strong> Bạn có thể nhấn <strong>Xuất Word (.doc)</strong> hoặc <strong>Xuất Excel / Sheets</strong> để chỉnh sửa nội dung dễ dàng, hoặc chọn <strong>In / Lưu PDF</strong> để xuất văn bản 2 trang chuẩn A4.
           </span>
         </div>
 

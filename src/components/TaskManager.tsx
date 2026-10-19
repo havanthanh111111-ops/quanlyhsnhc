@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import { CustomConfirmModal } from './CustomConfirmModal';
 import { getWeekConfig, generateWeeks, isDateInWeek } from '../utils/weekUtils';
 import { db, onSnapshot, doc } from '../lib/firebase';
+import { exportHtmlElementToWord } from '../utils/documentExport';
 
 interface TaskManagerProps {
   students: Student[];
@@ -905,13 +906,28 @@ export default function TaskManager({
               <div className="bg-[#111] rounded-3xl border border-white/5 shadow-lg p-6 flex flex-col h-full">
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/5 shrink-0">
                   <span className="text-xs text-white/30 font-mono uppercase tracking-wider">Bản xem trước báo cáo định kỳ</span>
-                  <button
-                    id="btn-report-print"
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-black px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
-                  >
-                    <Printer size={14} /> In báo cáo / Lưu PDF
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      id="btn-report-export-word"
+                      type="button"
+                      onClick={() => {
+                        if (reportPrintRef.current) {
+                          exportHtmlElementToWord(reportPrintRef.current, reportTitle, reportTitle.replace(/\s+/g, '_'));
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                      title="Xuất file Word (.doc) để dễ dàng chỉnh sửa văn bản trên Word hoặc Google Docs"
+                    >
+                      <FileText size={14} /> Xuất Word (.doc)
+                    </button>
+                    <button
+                      id="btn-report-print"
+                      onClick={() => window.print()}
+                      className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-black px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                    >
+                      <Printer size={14} /> In báo cáo / Lưu PDF
+                    </button>
+                  </div>
                 </div>
 
                 {/* Formatting Toolbar */}

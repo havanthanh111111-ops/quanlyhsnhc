@@ -379,15 +379,15 @@ export default function CommunityActivitiesView({
               </div>
             </div>
 
-            {/* Nút Xuất PDF Trình BGH */}
+            {/* Nút Xuất Báo Cáo (Word / Excel / PDF) Trình BGH */}
             <button
               type="button"
               onClick={() => setIsPdfModalOpen(true)}
               className="px-4 py-3 rounded-2xl text-xs font-black flex items-center gap-2 transition cursor-pointer shadow-md bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-slate-200/50 active:scale-95"
-              title="Xuất mẫu văn bản bảng hoạt động kẻ bảng trình BGH có để trống chữ ký"
+              title="Xuất văn bản báo cáo hoạt động phong trào dạng Word (.doc), Excel (.xlsx), hoặc In/Lưu PDF"
             >
-              <Printer size={16} className="text-blue-600" />
-              <span>Xuất PDF (Trình BGH)</span>
+              <FileText size={16} className="text-blue-600" />
+              <span>Xuất Báo Cáo (Word/Excel/PDF)</span>
             </button>
 
             <button

@@ -7,6 +7,7 @@ import React, { useState, useRef } from 'react';
 import { WeeklyPlan } from '../types';
 import { Plus, Calendar, FileText, Sparkles, BookOpen, Edit2, CheckCircle2, Printer, Trash2, AlertTriangle, X } from 'lucide-react';
 import { getWeekConfig, generateWeeks } from '../utils/weekUtils';
+import { exportHtmlElementToWord } from '../utils/documentExport';
 
 interface WeeklyPlannerProps {
   plans: WeeklyPlan[];
@@ -379,8 +380,23 @@ export default function WeeklyPlanner({
                   </button>
                 )}
                 <button
+                  onClick={() => {
+                    if (printRef.current && selectedPlan) {
+                      exportHtmlElementToWord(
+                        printRef.current, 
+                        `Ke_Hoach_Tuan_${selectedPlan.weekNumber}`, 
+                        `Ke_Hoach_Tuan_${selectedPlan.weekNumber}_${activeClassName || 'Lop'}`
+                      );
+                    }
+                  }}
+                  className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                  title="Xuất kế hoạch tuần ra file Word (.doc) để dễ dàng chỉnh sửa văn bản trên Word hoặc Google Docs"
+                >
+                  <FileText size={13} /> Xuất Word (.doc)
+                </button>
+                <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
                 >
                   <Printer size={12} /> In kế hoạch / Lưu PDF
                 </button>
