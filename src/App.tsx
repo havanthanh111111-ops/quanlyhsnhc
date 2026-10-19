@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser, DocumentCategory, PhotoAlbum } from './types';
+import { Student, ViolationRecord, WeeklyPlan, StudentTask, SheetSyncConfig, ViolationType, Teacher, SchoolYear, ClassItem, AcademicUpdate, SystemUser, DocumentCategory, PhotoAlbum, DEFAULT_SUBJECTS } from './types';
 import { initialStudents, initialViolations, initialWeeklyPlans, initialTasks, initialViolationTypes, initialAcademicUpdates, initialUsers, initialDocumentCategories, initialAlbums } from './data/initialData';
 import StudentManager from './components/StudentManager';
 import DiligenceManager from './components/DiligenceManager';
@@ -19,7 +19,7 @@ import DocumentManager from './components/DocumentManager';
 import AlbumManager from './components/AlbumManager';
 
 // Firebase Database imports
-import { db, onSnapshot, collection } from './lib/firebase';
+import { db, onSnapshot, collection, doc, setDoc } from './lib/firebase';
 import * as dbService from './lib/dbService';
 
 // Icons
@@ -284,6 +284,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : initialAcademicUpdates;
   });
 
+  const [subjects, setSubjects] = useState<string[]>(() => {
+    const saved = localStorage.getItem('app_subjects_list');
+    return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
+  });
+
   const [adminPin, setAdminPin] = useState<string>(() => {
     return localStorage.getItem('app_admin_pin') || '1234';
   });
@@ -433,7 +438,10 @@ export default function App() {
           handleFirstConnection();
           const list: ViolationType[] = [];
           snap.forEach(doc => list.push(doc.data() as ViolationType));
-          if (list.length > 0) setViolationTypes(list);
+          if (list.length > 0) {
+            setViolationTypes(list);
+            localStorage.setItem('app_violation_types', JSON.stringify(list));
+          }
         }, (err) => {
           console.error('Lỗi subscription violationTypes:', err);
           if (!hasConnected) setDbError(err?.message || String(err));
@@ -535,6 +543,12 @@ export default function App() {
                 localStorage.setItem('totalSchoolWeeks', data.totalWeeks.toString());
                 // Dispatch event so other components receive the storage change
                 window.dispatchEvent(new Event('storage'));
+              }
+            } else if (docDoc.id === 'academicSubjects') {
+              const data = docDoc.data();
+              if (Array.isArray(data?.list) && data.list.length > 0) {
+                setSubjects(data.list);
+                localStorage.setItem('app_subjects_list', JSON.stringify(data.list));
               }
             }
           });
@@ -669,6 +683,24 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('app_sync_config', JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem('app_subjects_list', JSON.stringify(subjects));
+  }, [subjects]);
+
+  const handleUpdateSubjects = async (newList: string[]) => {
+    setSubjects(newList);
+    localStorage.setItem('app_subjects_list', JSON.stringify(newList));
+    try {
+      await setDoc(doc(db, 'settings', 'academicSubjects'), {
+        id: 'academicSubjects',
+        list: newList,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Lỗi lưu danh sách môn học lên Firestore:', err);
+    }
+  };
 
   // State modifiers
   const handleAddStudent = (s: Student) => {
@@ -1094,6 +1126,7 @@ export default function App() {
           academicUpdates={academicUpdates}
           documentCategories={documentCategories}
           albums={albums}
+          subjects={subjects}
           onUpdateStudent={handleUpdateStudent}
           onOpenAdmin={() => {
             if (currentUser) {
@@ -1827,6 +1860,7 @@ export default function App() {
                 onDeleteAcademicUpdate={handleDeleteAcademicUpdate}
                 imageFolderId={config.imageFolderId}
                 isReadOnly={isReadOnly}
+                subjects={subjects}
               />
             )}
 
@@ -1851,6 +1885,8 @@ export default function App() {
                 onUpdateAcademicUpdate={handleUpdateAcademicUpdate}
                 onDeleteAcademicUpdate={handleDeleteAcademicUpdate}
                 isReadOnly={isReadOnly}
+                subjects={subjects}
+                onUpdateSubjects={handleUpdateSubjects}
               />
             )}
 
@@ -1957,6 +1993,8 @@ export default function App() {
                 users={users}
                 onAddUser={handleAddUser}
                 onDeleteUser={handleDeleteUser}
+                subjects={subjects}
+                onUpdateSubjects={handleUpdateSubjects}
               />
             )}
           </div>
